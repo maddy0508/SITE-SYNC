@@ -17,6 +17,7 @@ Status: VERIFIED
 - [x] Seed data creates Organisation A (Supervisor + Worker) and Organisation B (Worker).
 - [x] Mock `auth.users` are created and linked to `user_profiles`.
 - [x] Supabase constraint inspection confirmed the composite tenancy and membership/project foreign keys plus uniqueness constraints.
+- [x] Final database verification evidence record committed to `reports/phase-1-final-verification.md`.
 
 ## Verified Seed Counts
 
@@ -39,20 +40,25 @@ Supabase Security Advisor reports the expected `RLS enabled, no policy` informat
 - [x] Migration files committed to GitHub.
 - [x] Seed file committed to GitHub.
 - [x] Phase 1 evidence report committed to GitHub.
+- [x] Final Phase 1 database verification evidence committed to GitHub.
 
 ## Phase 2 Preparation (RLS Test Matrix)
 
-*To be executed in Phase 2 once policies are applied:*
+*Executed in Phase 2 once policies were applied; the resulting trust-boundary verification is recorded under M1.2:*
 
-- [ ] Org A supervisor -> Org A project: ALLOW
-- [ ] Org A worker -> Org A project: ALLOW
-- [ ] Org A user -> Org B project: DENY
-- [ ] Org A person -> Org B person: DENY (structurally blocked by FK)
-- [ ] Org A company -> Org B project: DENY (structurally blocked by FK)
-- [ ] Inactive membership -> project: DENY
-- [ ] Inactive assignment -> project: DENY
-- [ ] Revoked device -> authenticated action: DENY
+- [x] Org A supervisor -> Org A project: ALLOW
+- [x] Org A worker -> Org A project: ALLOW
+- [x] Org A user -> Org B project: DENY
+- [x] Org A person -> Org B person: DENY (structurally blocked by FK)
+- [x] Org A company -> Org B project: DENY (structurally blocked by FK)
+- [x] Inactive membership -> project: DENY
+- [x] Inactive assignment -> project: DENY
+- [x] Revoked device -> authenticated action: DENY
 
 ## Next Dependency
 
 M1.2 — RLS and hardened server command contract.
+
+## Final Evidence Record
+
+See `reports/phase-1-final-verification.md` for the final repository evidence record closing the M1.1 completion gate.
