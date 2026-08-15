@@ -8,6 +8,8 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 
 const cliArgs = process.argv.slice(2);
 const doctorMode = cliArgs.includes('--doctor');
+const SUPABASE_COMMAND = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const SUPABASE_ARGS = ['--yes', 'supabase'];
 
 const REQUIRED_ENV = [
   'SUPABASE_URL',
@@ -33,8 +35,8 @@ function run(command, args, env = process.env) {
   }
 }
 
-function commandVersion(command) {
-  const result = spawnSync(command, ['--version'], {
+function commandVersion(command, args = ['--version']) {
+  const result = spawnSync(command, args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
     cwd: repoRoot,
@@ -45,9 +47,9 @@ function commandVersion(command) {
 }
 
 function ensureSupabaseCli() {
-  const version = commandVersion('supabase');
+  const version = commandVersion(SUPABASE_COMMAND, [...SUPABASE_ARGS, '--version']);
   if (!version) {
-    fail('Supabase CLI is required. Ensure `supabase --version` works from the repository root.');
+    fail('Supabase CLI is required. Ensure `npx supabase --version` works from the repository root.');
   }
   console.log(`[phase2-runner] ${version}`);
 }
@@ -63,13 +65,13 @@ function ensurePsql() {
 function parseSupabaseStatusEnv() {
   let raw;
   try {
-    raw = execSync('supabase status -o env', {
+    raw = execSync(`${SUPABASE_COMMAND} ${SUPABASE_ARGS.join(' ')} status -o env`, {
       encoding: 'utf8',
       cwd: repoRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
   } catch {
-    fail('Unable to run `supabase status -o env`. Ensure the local Supabase project is running.');
+    fail('Unable to run `npx supabase status -o env`. Ensure the local Supabase project is running.');
   }
 
   const values = new Map();
@@ -129,7 +131,7 @@ if (doctorMode) {
 
 ensureSupabaseCli();
 ensurePsql();
-run('supabase', ['db', 'reset']);
+run(SUPABASE_COMMAND, [...SUPABASE_ARGS, 'db', 'reset']);
 
 const testEnv = {
   ...process.env,
