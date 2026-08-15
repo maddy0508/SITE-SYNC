@@ -1,4 +1,4 @@
-import { spawnSync, execSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import process from 'node:process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,7 +65,7 @@ function ensurePsql() {
 function parseSupabaseStatusEnv() {
   let raw;
   try {
-    raw = execSync(`${SUPABASE_COMMAND} ${SUPABASE_ARGS.join(' ')} status -o env`, {
+    raw = execFileSync(SUPABASE_COMMAND, [...SUPABASE_ARGS, 'status', '-o', 'env'], {
       encoding: 'utf8',
       cwd: repoRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -75,15 +75,30 @@ function parseSupabaseStatusEnv() {
   }
 
   const values = new Map();
+
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
+
     const separatorIndex = trimmed.indexOf('=');
     if (separatorIndex <= 0) continue;
+
     const key = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
+    let value = trimmed.slice(separatorIndex + 1).trim();
+
+    // `supabase status -o env` may emit shell-style quoted values.
+    // Normalize only the surrounding matching quotes; never log the value.
+    if (
+      value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'")))
+    ) {
+      value = value.slice(1, -1);
+    }
+
     if (key && value) values.set(key, value);
   }
+
   return values;
 }
 
@@ -109,8 +124,13 @@ function discoverSupabaseEnv() {
     fail(`Unable to map required Phase 2 environment values. Missing: ${missing.join(', ')}. Available Supabase status keys: ${availableKeys}.`);
   }
 
-  if (!/^https?:\/\//.test(env.SUPABASE_URL)) fail('Discovered SUPABASE_URL does not look like an HTTP URL.');
-  if (!/^postgres(ql)?:\/\//.test(env.SUPABASE_DB_URL)) fail('Discovered SUPABASE_DB_URL does not look like a Postgres connection URL.');
+  if (!/^https?:\/\//.test(env.SUPABASE_URL)) {
+    fail('Discovered SUPABASE_URL does not look like an HTTP URL.');
+  }
+
+  if (!/^postgres(ql)?:\/\//.test(env.SUPABASE_DB_URL)) {
+    fail('Discovered SUPABASE_DB_URL does not look like a Postgres connection URL.');
+  }
 
   console.log(`[phase2-runner] environment discovery resolved: ${REQUIRED_ENV.join(', ')}`);
   return env;
