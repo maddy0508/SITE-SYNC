@@ -44,16 +44,16 @@ Supabase Security Advisor reports the expected `RLS enabled, no policy` informat
 
 ## Phase 2 Preparation (RLS Test Matrix)
 
-*Executed in Phase 2 once policies were applied; the resulting trust-boundary verification is recorded under M1.2:*
+*To be executed in Phase 2 once policies are applied:*
 
-- [x] Org A supervisor -> Org A project: ALLOW
-- [x] Org A worker -> Org A project: ALLOW
-- [x] Org A user -> Org B project: DENY
-- [x] Org A person -> Org B person: DENY (structurally blocked by FK)
-- [x] Org A company -> Org B project: DENY (structurally blocked by FK)
-- [x] Inactive membership -> project: DENY
-- [x] Inactive assignment -> project: DENY
-- [x] Revoked device -> authenticated action: DENY
+- [ ] Org A supervisor -> Org A project: ALLOW
+- [ ] Org A worker -> Org A project: ALLOW
+- [ ] Org A user -> Org B project: DENY
+- [ ] Org A person -> Org B person: DENY (structurally blocked by FK)
+- [ ] Org A company -> Org B project: DENY (structurally blocked by FK)
+- [ ] Inactive membership -> project: DENY
+- [ ] Inactive assignment -> project: DENY
+- [ ] Revoked device -> authenticated action: DENY
 
 ## Next Dependency
 
