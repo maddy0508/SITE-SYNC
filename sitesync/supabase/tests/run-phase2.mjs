@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
 const integrationDir = path.join(repoRoot, 'supabase', 'tests', 'integration');
+const preflightTest = path.join(integrationDir, 'preflight.test.mjs');
 
 const cliArgs = process.argv.slice(2);
 const doctorMode = cliArgs.includes('--doctor');
@@ -127,7 +128,7 @@ function discoverSupabaseEnv() {
 
 function integrationTestFiles() {
   return fs.readdirSync(integrationDir)
-    .filter((name) => name.endsWith('.test.mjs'))
+    .filter((name) => name.endsWith('.test.mjs') && name !== 'preflight.test.mjs')
     .sort()
     .map((name) => path.join(integrationDir, name));
 }
@@ -153,6 +154,12 @@ const testEnv = {
   ...process.env,
   ...discoverSupabaseEnv(),
 };
+
+if (!fs.existsSync(preflightTest)) {
+  fail(`Missing Phase 2 preflight test: ${preflightTest}`);
+}
+
+run('node', ['--test', preflightTest], testEnv);
 
 const testFiles = integrationTestFiles();
 if (testFiles.length === 0) {
