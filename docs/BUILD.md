@@ -14,7 +14,7 @@ Required build components:
 - Gradle 9.3.1 via the checked-in Gradle wrapper
 - Hermes
 
-React Native 0.86 is the current stable release at project start and supports Android 15+ edge-to-edge improvements. The official template currently pins the Android toolchain to compile/target SDK 36, Build Tools 36.0.0, NDK 27.1.12297006 and Gradle 9.3.1. citeturn1search1turn10file0turn11file0
+React Native 0.86 is the current stable release at project start. The official 0.86 Community template pins Android compile/target SDK 36, Build Tools 36.0.0, NDK 27.1.12297006 and Gradle 9.3.1.
 
 ## Build command
 
