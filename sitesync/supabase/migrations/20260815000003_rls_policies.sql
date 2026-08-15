@@ -170,3 +170,20 @@ GRANT SELECT ON public.device_installations TO authenticated;
 GRANT SELECT ON public.attendance_events TO authenticated;
 GRANT SELECT ON public.attendance_states TO authenticated;
 GRANT SELECT ON public.timesheets TO authenticated;
+
+-- service_role is the privileged backend/test role. PUBLIC access was revoked above,
+-- so its privileges must be explicit rather than inherited through PUBLIC.
+GRANT ALL ON public.organisations TO service_role;
+GRANT ALL ON public.companies TO service_role;
+GRANT ALL ON public.persons TO service_role;
+GRANT ALL ON public.user_profiles TO service_role;
+GRANT ALL ON public.company_memberships TO service_role;
+GRANT ALL ON public.projects TO service_role;
+GRANT ALL ON public.project_company_participation TO service_role;
+GRANT ALL ON public.project_assignments TO service_role;
+GRANT ALL ON public.device_installations TO service_role;
+GRANT ALL ON public.attendance_events TO service_role;
+GRANT ALL ON public.attendance_states TO service_role;
+GRANT ALL ON public.timesheets TO service_role;
+GRANT ALL ON public.processed_commands TO service_role;
+GRANT ALL ON public.audit_events TO service_role;
