@@ -42,7 +42,7 @@ test('supervisor cannot act for an unassigned target',async()=>{
 
 test('revoked device is denied',async()=>{
  const client=await userClient('worker@sitesync.test');
- try{await update('device_installations',{id:IDS.workerADevice},{status:'REVOKED',revoked_at:'2099-02-03 08:00:00+00'});denied(await rpc(client,payload({commandId:COMMAND_IDS.revokedDevice,personId:IDS.workerAPerson,deviceInstallationId:IDS.workerADevice,workDate:'2099-02-03'})),'DEVICE_REVOKED');}
+ try{await update('device_installations',{id:IDS.workerADevice},{status:'REVOKED',revoked_at:'2099-02-03 08:00:00+00'});denied(await rpc(client,payload({commandId:COMMAND_IDS.revokedDevice,personId:IDS.workerAPerson,deviceInstallationId:IDS.workerADevice,workDate:'2099-02-03'})),'PERMISSION_DENIED','DEVICE_REVOKED');}
  finally{await update('device_installations',{id:IDS.workerADevice},{status:'ACTIVE',revoked_at:null});}
 });
 
