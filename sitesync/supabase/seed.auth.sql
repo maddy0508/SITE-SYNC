@@ -2,9 +2,9 @@
 -- Phase 2 local auth fixtures
 --
 -- The main seed creates deterministic auth.users rows directly so public
--- fixtures can reference stable auth user IDs. GoTrue also requires the
+-- fixtures can reference stable auth user IDs. GoTrue requires the
 -- string-valued token columns to be non-NULL and email/password users need
--- an email identity.
+-- a complete email identity, including provider_id.
 -- ==========================================
 
 UPDATE auth.users
@@ -25,6 +25,7 @@ WHERE id IN (
 INSERT INTO auth.identities (
   id,
   user_id,
+  provider_id,
   identity_data,
   provider,
   last_sign_in_at,
@@ -32,9 +33,9 @@ INSERT INTO auth.identities (
   updated_at
 )
 VALUES
-  ('88888888-8888-4888-8888-888888888881', '11111111-1111-4111-8111-111111111111', '{"sub":"11111111-1111-4111-8111-111111111111","email":"supervisor@sitesync.test"}', 'email', NULL, NOW(), NOW()),
-  ('88888888-8888-4888-8888-888888888882', '11111111-1111-4111-8111-111111111112', '{"sub":"11111111-1111-4111-8111-111111111112","email":"worker@sitesync.test"}', 'email', NULL, NOW(), NOW()),
-  ('88888888-8888-4888-8888-888888888883', '11111111-1111-4111-8111-111111111113', '{"sub":"11111111-1111-4111-8111-111111111113","email":"worker-b@sitesync.test"}', 'email', NULL, NOW(), NOW()),
-  ('88888888-8888-4888-8888-888888888884', '11111111-1111-4111-8111-111111111121', '{"sub":"11111111-1111-4111-8111-111111111121","email":"worker-a2@sitesync.test"}', 'email', NULL, NOW(), NOW()),
-  ('88888888-8888-4888-8888-888888888885', '11111111-1111-4111-8111-111111111122', '{"sub":"11111111-1111-4111-8111-111111111122","email":"admin-a@sitesync.test"}', 'email', NULL, NOW(), NOW()),
-  ('88888888-8888-4888-8888-888888888886', '11111111-1111-4111-8111-111111111123', '{"sub":"11111111-1111-4111-8111-111111111123","email":"supervisor-b@sitesync.test"}', 'email', NULL, NOW(), NOW());
+  ('88888888-8888-4888-8888-888888888881', '11111111-1111-4111-8111-111111111111', 'supervisor@sitesync.test', '{"sub":"11111111-1111-4111-8111-111111111111","email":"supervisor@sitesync.test"}', 'email', NULL, NOW(), NOW()),
+  ('88888888-8888-4888-8888-888888888882', '11111111-1111-4111-8111-111111111112', 'worker@sitesync.test', '{"sub":"11111111-1111-4111-8111-111111111112","email":"worker@sitesync.test"}', 'email', NULL, NOW(), NOW()),
+  ('88888888-8888-4888-8888-888888888883', '11111111-1111-4111-8111-111111111113', 'worker-b@sitesync.test', '{"sub":"11111111-1111-4111-8111-111111111113","email":"worker-b@sitesync.test"}', 'email', NULL, NOW(), NOW()),
+  ('88888888-8888-4888-8888-888888888884', '11111111-1111-4111-8111-111111111121', 'worker-a2@sitesync.test', '{"sub":"11111111-1111-4111-8111-111111111121","email":"worker-a2@sitesync.test"}', 'email', NULL, NOW(), NOW()),
+  ('88888888-8888-4888-8888-888888888885', '11111111-1111-4111-8111-111111111122', 'admin-a@sitesync.test', '{"sub":"11111111-1111-4111-8111-111111111122","email":"admin-a@sitesync.test"}', 'email', NULL, NOW(), NOW()),
+  ('88888888-8888-4888-8888-888888888886', '11111111-1111-4111-8111-111111111123', 'supervisor-b@sitesync.test', '{"sub":"11111111-1111-4111-8111-111111111123","email":"supervisor-b@sitesync.test"}', 'email', NULL, NOW(), NOW());
