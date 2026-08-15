@@ -1,10 +1,12 @@
 import { spawnSync, execFileSync } from 'node:child_process';
 import process from 'node:process';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
+const integrationDir = path.join(repoRoot, 'supabase', 'tests', 'integration');
 
 const cliArgs = process.argv.slice(2);
 const doctorMode = cliArgs.includes('--doctor');
@@ -75,19 +77,13 @@ function parseSupabaseStatusEnv() {
   }
 
   const values = new Map();
-
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
-
     const separatorIndex = trimmed.indexOf('=');
     if (separatorIndex <= 0) continue;
-
     const key = trimmed.slice(0, separatorIndex).trim();
     let value = trimmed.slice(separatorIndex + 1).trim();
-
-    // `supabase status -o env` may emit shell-style quoted values.
-    // Normalize only the surrounding matching quotes; never log the value.
     if (
       value.length >= 2 &&
       ((value.startsWith('"') && value.endsWith('"')) ||
@@ -95,10 +91,8 @@ function parseSupabaseStatusEnv() {
     ) {
       value = value.slice(1, -1);
     }
-
     if (key && value) values.set(key, value);
   }
-
   return values;
 }
 
@@ -124,16 +118,18 @@ function discoverSupabaseEnv() {
     fail(`Unable to map required Phase 2 environment values. Missing: ${missing.join(', ')}. Available Supabase status keys: ${availableKeys}.`);
   }
 
-  if (!/^https?:\/\//.test(env.SUPABASE_URL)) {
-    fail('Discovered SUPABASE_URL does not look like an HTTP URL.');
-  }
-
-  if (!/^postgres(ql)?:\/\//.test(env.SUPABASE_DB_URL)) {
-    fail('Discovered SUPABASE_DB_URL does not look like a Postgres connection URL.');
-  }
+  if (!/^https?:\/\//.test(env.SUPABASE_URL)) fail('Discovered SUPABASE_URL does not look like an HTTP URL.');
+  if (!/^postgres(ql)?:\/\//.test(env.SUPABASE_DB_URL)) fail('Discovered SUPABASE_DB_URL does not look like a Postgres connection URL.');
 
   console.log(`[phase2-runner] environment discovery resolved: ${REQUIRED_ENV.join(', ')}`);
   return env;
+}
+
+function integrationTestFiles() {
+  return fs.readdirSync(integrationDir)
+    .filter((name) => name.endsWith('.test.mjs'))
+    .sort()
+    .map((name) => path.join(integrationDir, name));
 }
 
 function doctor() {
@@ -158,7 +154,12 @@ const testEnv = {
   ...discoverSupabaseEnv(),
 };
 
-run('node', ['--test', path.join(repoRoot, 'supabase/tests/integration')], testEnv);
+const testFiles = integrationTestFiles();
+if (testFiles.length === 0) {
+  fail(`No integration test files found in ${integrationDir}`);
+}
+
+run('node', ['--test', ...testFiles], testEnv);
 run('psql', [
   testEnv.SUPABASE_DB_URL,
   '-v',
