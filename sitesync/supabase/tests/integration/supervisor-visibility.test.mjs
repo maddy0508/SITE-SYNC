@@ -6,15 +6,15 @@ const IDS={
  workerBPerson:'00000000-0000-4000-8000-000000000013',
  workerBMembership:'22222222-2222-4222-8222-222222222224',
  workerBAssignment:'33333333-3333-4333-8333-333333333334',
- workerC:'00000000-0000-4000-8000-000000000014',
- workerCAssignment:'33333333-3333-4333-8333-333333333335',
+ workerCAssignment:'33333333-3333-4333-8333-333333333337',
+ workerC:'00000000-0000-4000-8000-000000000015',
  orgBPerson:'00000000-0000-4000-8000-000000000111',
  orgBAssignment:'33333333-3333-4333-8333-333333333333',
  supervisorAAssignment:'33333333-3333-4333-8333-333333333331',
 };
 const PROJECT_A='00000000-0000-4000-8000-000000000020';
 const PROJECT_B='00000000-0000-4000-8000-000000000120';
-const PROJECT_C='00000000-0000-4000-8000-000000000021';
+const PROJECT_C='00000000-0000-4000-8000-000000000030';
 async function count(c,table,filters){let q=c.from(table).select('*',{count:'exact',head:true});for(const[k,v]of Object.entries(filters))q=q.eq(k,v);const{count,error}=await q;assert.ifError(error);return count;}
 async function setStatus(id,status){const{error}=await serviceClient.from('project_assignments').update({status}).eq('id',id);assert.ifError(error);}
 
