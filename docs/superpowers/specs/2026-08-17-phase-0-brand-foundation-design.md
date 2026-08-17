@@ -1,12 +1,12 @@
 # SITE-SYNC Phase 0 — Brand Foundation Design
 
 ## Status
-Approved design; editable Figma source of truth created as **SITE-SYNC — Brand Foundation**.
+Corrected design specification. The active chromatic system is now **8 colours**; Bright Aqua is removed from the active brand palette.
 
 ## Purpose
 Establish the immutable visual foundation for Phase 0 before production feature UI is implemented.
 
-## Canonical brand colours
+## Canonical active brand colours
 
 ### Solar
 - `#FCB93E` — Solar Gold
@@ -21,23 +21,26 @@ Establish the immutable visual foundation for Phase 0 before production feature 
 ### Technical
 - `#067699` — Teal
 - `#10A7BE` — Aqua
-- `#06A7BE` — Bright Aqua
 
-These nine chromatic values are the complete locked brand palette. No purple, generic green, generic red, neon substitutions, or invented chromatic brand hues are permitted.
+`#06A7BE` — Bright Aqua is removed from the active brand system. It must not be used in production UI unless explicitly reinstated later.
+
+No purple, generic green, generic red, neon substitutions, or invented chromatic brand hues are permitted.
 
 ## Gradient system
 
 ### Solar Gradient
-`#FCB93E → #FDA822 → #F98D0F`
+**Solar-only:** `#FCB93E → #FDA822 → #F98D0F`
+
+The Solar Gradient must remain entirely within the Solar family. **It must not transition into blue, teal, aqua, or any Infrastructure/Technical colour.**
 
 ### Infrastructure Gradient
 `#021939 → #023056 → #055077`
 
 ### Technical Gradient
-`#067699 → #10A7BE → #06A7BE`
+`#067699 → #10A7BE`
 
 ### SITE-SYNC Signature Gradient
-A controlled continuous transition across Solar, Infrastructure and Technical families. Gradients are a brand language, not a replacement for semantic colours.
+A controlled continuous transition across the active Solar, Infrastructure and Technical families, using only the eight active colours. This is distinct from the Solar Gradient and must not be used as a substitute for the Solar family gradient.
 
 ## Logo rules
 
@@ -51,7 +54,7 @@ Header/banner treatment uses the actual logo enlarged, cropped and rendered semi
 - Background hierarchy: SITE-SYNC Navy → Deep Blue → Structural Blue.
 - Solar family carries primary emphasis and activation.
 - Technical family carries connection, technology and synchronisation.
-- Controlled gradients may span the three brand families.
+- Controlled gradients may span the active brand families where appropriate.
 
 ### Light
 - Warm neutral base.
@@ -64,7 +67,8 @@ Header/banner treatment uses the actual logo enlarged, cropped and rendered semi
 - Flat brand colours are allowed where a single semantic or structural value is required.
 - Gradient treatments are preferred for designated brand accents, outlines, signature surfaces and selected indicators where they improve hierarchy.
 - Gradients must remain restrained; the interface must not become a collection of unrelated rainbow accents.
-- Brand colours must never be substituted with visually similar colours from outside the canonical palette.
+- The Solar Gradient is specifically restricted to Solar Gold → Solar Amber → Solar Orange.
+- Brand colours must never be substituted with visually similar colours from outside the active palette.
 - Semantic status colours will be defined separately in the wider Phase 0 design system and must not silently alter the canonical brand palette.
 
 ## Figma source of truth
@@ -73,7 +77,7 @@ Figma file: `SITE-SYNC — Brand Foundation`
 
 `https://www.figma.com/design/j8K9GWR1bnCYy4dOMbmUQE`
 
-The file contains the canonical colour palette, reusable gradient styles, editable logo specimen, dark-theme reference, and logo/usage rules. The supplied raster logo could not be uploaded directly because the Figma asset upload endpoint was unreachable from the execution environment; an editable vector specimen matching the locked geometry/colour language is included as a temporary working representation. The supplied logo remains authoritative.
+The Figma foundation must be corrected to match this specification: Bright Aqua removed, Solar Gradient corrected to Solar-only, and the Signature Gradient kept separate from the Solar Gradient.
 
 ## Scope boundary
 
