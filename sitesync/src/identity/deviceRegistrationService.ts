@@ -4,7 +4,6 @@ import {
   insertLocalDeviceSession,
   updateLocalDeviceSession,
 } from '../database/localPersistence';
-import type { LocalDeviceSessionRecord } from '../domain/localPersistence';
 
 export type DeviceRegistrationErrorCode =
   | 'INVALID_INPUT'
