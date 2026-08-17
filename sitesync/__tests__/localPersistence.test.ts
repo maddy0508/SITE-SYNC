@@ -9,7 +9,6 @@ import {
   getCommandLedger,
   updateCommandLedgerStatus,
   getStaleProcessingCommands,
-  getPendingRetryCommands,
   purgeTenantData,
   insertLocalDeviceSession,
   updateLocalDeviceSession,
