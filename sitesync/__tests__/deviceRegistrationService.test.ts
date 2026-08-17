@@ -29,7 +29,13 @@ function createMockClient() {
         return { data: rows[0] ?? null, error: null };
       }),
       insert: jest.fn((payload: any) => {
-        const row = { id: INSTALLATION_ID, ...payload };
+        const row = {
+          id: INSTALLATION_ID,
+          created_at: '2026-08-17T10:00:00.000+00:00',
+          ...payload,
+          last_seen_at: payload.last_seen_at ?? '2026-08-17T10:00:00.000+00:00',
+          revoked_at: null,
+        };
         state.set(row.id, row);
         builder.inserted = row;
         return builder;
@@ -79,6 +85,7 @@ describe('DeviceRegistrationService', () => {
 
     expect(result.userId).toBe(USER_A);
     expect(result.status).toBe('ACTIVE');
+    expect(result.createdAt).toBe(NOW);
     expect(client.state.get(INSTALLATION_ID).user_id).toBe(USER_A);
     expect(local.insertLocalDeviceSession).toHaveBeenCalledWith(expect.objectContaining({
       userId: USER_A,
@@ -98,6 +105,19 @@ describe('DeviceRegistrationService', () => {
 
     expect(second.id).toBe(first.id);
     expect(local.insertLocalDeviceSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a second installation key when the local boundary already has a different installation', async () => {
+    const client = createMockClient();
+    const local = createLocalPersistence();
+    const service = new DeviceRegistrationService(client as never, local);
+
+    await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
+
+    await expect(service.register(USER_A, { installationKey: 'different-key', now: NOW })).rejects.toMatchObject({
+      code: 'LOCAL_DEVICE_CONFLICT',
+    });
+    expect(client.state.size).toBe(1);
   });
 
   it('preserves ACTIVE to REVOKED lifecycle and rejects a second revocation transition', async () => {
