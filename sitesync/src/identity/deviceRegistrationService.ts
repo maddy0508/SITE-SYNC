@@ -12,7 +12,8 @@ export type DeviceRegistrationErrorCode =
   | 'CROSS_USER_ACCESS'
   | 'SUPABASE_FAILED'
   | 'INVALID_LIFECYCLE'
-  | 'REVISION_MISMATCH';
+  | 'REVISION_MISMATCH'
+  | 'LOCAL_DEVICE_CONFLICT';
 
 export class DeviceRegistrationServiceError extends Error {
   readonly code: DeviceRegistrationErrorCode;
@@ -66,6 +67,14 @@ export class DeviceRegistrationService {
   async register(authenticatedUserId: string, input: DeviceRegistrationInput): Promise<DeviceInstallation> {
     this.validateInput(authenticatedUserId, input);
 
+    const localSession = await this.local.getLocalDeviceSession(authenticatedUserId);
+    if (localSession && localSession.installationKey !== input.installationKey) {
+      throw new DeviceRegistrationServiceError(
+        'LOCAL_DEVICE_CONFLICT',
+        'A different device installation is already authoritative in local persistence',
+      );
+    }
+
     const existing = await this.client
       .from('device_installations')
       .select('id, user_id, installation_key, device_name, app_version, os_version, status, created_at, last_seen_at, revoked_at')
@@ -83,6 +92,13 @@ export class DeviceRegistrationService {
         return this.syncLocalSession(installation, input.now);
       }
       return installation;
+    }
+
+    if (localSession) {
+      throw new DeviceRegistrationServiceError(
+        'DEVICE_NOT_FOUND',
+        'Local device session exists but its authoritative installation could not be resolved',
+      );
     }
 
     const inserted = await this.client
@@ -231,10 +247,18 @@ export class DeviceRegistrationService {
       appVersion: row.app_version == null ? null : String(row.app_version),
       osVersion: row.os_version == null ? null : String(row.os_version),
       status,
-      createdAt: String(row.created_at),
-      lastSeenAt: String(row.last_seen_at),
-      revokedAt: row.revoked_at == null ? null : String(row.revoked_at),
+      createdAt: this.normalizeTimestamp(row.created_at, 'created_at'),
+      lastSeenAt: this.normalizeTimestamp(row.last_seen_at, 'last_seen_at'),
+      revokedAt: row.revoked_at == null ? null : this.normalizeTimestamp(row.revoked_at, 'revoked_at'),
     };
+  }
+
+  private normalizeTimestamp(value: unknown, field: string): string {
+    const parsed = new Date(String(value));
+    if (Number.isNaN(parsed.getTime())) {
+      throw new DeviceRegistrationServiceError('SUPABASE_FAILED', `Invalid ${field} timestamp returned by Supabase`);
+    }
+    return parsed.toISOString();
   }
 
   private validateInput(authenticatedUserId: string, input: DeviceRegistrationInput): void {
@@ -243,6 +267,10 @@ export class DeviceRegistrationService {
     }
     if (!input.installationKey || !input.now) {
       throw new DeviceRegistrationServiceError('INVALID_INPUT', 'Installation key and timestamp are required');
+    }
+    const parsed = new Date(input.now);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== input.now) {
+      throw new DeviceRegistrationServiceError('INVALID_INPUT', 'Timestamp must be a normalized UTC ISO-8601 value');
     }
   }
 }
