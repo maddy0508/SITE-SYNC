@@ -66,6 +66,9 @@ yarn-error.log
 # testing
 /coverage
 
+# M1.3 local SQLite test databases
+.test-db/
+
 # Yarn
 .yarn/*
 !.yarn/patches
