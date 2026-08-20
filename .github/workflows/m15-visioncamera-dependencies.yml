@@ -1,0 +1,50 @@
+name: M1.5 VisionCamera dependencies
+
+on:
+  push:
+    branches:
+      - mckellarmaddy/mmm-33-m15-qr-attendance
+    paths:
+      - '.github/workflows/m15-visioncamera-dependencies.yml'
+      - 'sitesync/package.json'
+      - 'sitesync/package-lock.json'
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(m1.5): install VisionCamera') }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sitesync
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: mckellarmaddy/mmm-33-m15-qr-attendance
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+
+      - name: Install VisionCamera QR stack
+        run: npm install --save-exact react-native-vision-camera@5.2.2 react-native-nitro-modules@0.36.5 react-native-nitro-image@0.15.1 react-native-vision-camera-barcode-scanner@5.2.2
+
+      - name: Validate lockfile
+        run: npm ci --ignore-scripts
+
+      - name: Commit dependency resolution
+        working-directory: .
+        run: |
+          if git diff --quiet -- sitesync/package.json sitesync/package-lock.json; then
+            echo 'No dependency changes required.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add sitesync/package.json sitesync/package-lock.json
+          git commit -m 'chore(m1.5): install VisionCamera QR stack'
+          git push origin mckellarmaddy/mmm-33-m15-qr-attendance
