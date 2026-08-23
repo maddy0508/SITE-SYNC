@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "node scripts/agent-hooks/report-session-state.mjs",
+        "timeout": 5
+      }
+    ]
+  }
+}
