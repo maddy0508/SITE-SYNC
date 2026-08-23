@@ -41,13 +41,9 @@ for (const file of files) {
   }
 }
 
-if (failures.length) {
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: {
-      permissionDecision: 'deny',
-      permissionDecisionReason: failures.join('; '),
-    },
-  }));
-} else {
-  process.stdout.write(JSON.stringify({ continue: true }));
-}
+process.stdout.write(JSON.stringify({
+  continue: true,
+  ...(failures.length
+    ? { systemMessage: `Customization validation warning: ${failures.join('; ')}` }
+    : {}),
+}));
