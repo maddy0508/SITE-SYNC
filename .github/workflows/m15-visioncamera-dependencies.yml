@@ -35,7 +35,7 @@ jobs:
           cache-dependency-path: sitesync/package-lock.json
 
       - name: Install VisionCamera QR stack
-        run: npm install --save-exact react-native-vision-camera@5.2.2 react-native-nitro-modules@0.36.5 react-native-nitro-image@0.15.1 react-native-vision-camera-barcode-scanner@5.2.2
+        run: npm install --save-exact react-native-vision-camera@5.2.2 react-native-nitro-modules@0.36.5 react-native-nitro-image@0.15.1 react-native-vision-camera-barcode-scanner@5.2.2 qrcode-generator@2.0.4
 
       - name: Validate lockfile
         run: npm ci --ignore-scripts
