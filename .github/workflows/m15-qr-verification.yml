@@ -62,14 +62,14 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Assemble Android debug APK
+      - name: Assemble self-contained Android APK
         working-directory: sitesync/android
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: ./gradlew :app:assembleRelease --no-daemon
 
-      - name: Upload Android debug APK
+      - name: Upload self-contained Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: site-sync-m1.5-debug-apk
-          path: sitesync/android/app/build/outputs/apk/debug/*.apk
+          name: site-sync-m1.5-installable-apk
+          path: sitesync/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 7
