@@ -1,0 +1,67 @@
+name: M1.5 QR verification
+
+on:
+  push:
+    branches:
+      - feat/qr-attendance-milestone
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'sitesync/**'
+      - '.github/workflows/m15-qr-verification.yml'
+
+jobs:
+  qr-unit-and-typecheck:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sitesync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run M1.5 targeted tests
+        run: >-
+          npm test -- --runInBand
+          __tests__/qrCameraState.test.ts
+          __tests__/qrCameraPermission.test.ts
+          __tests__/qrPayload.test.ts
+          __tests__/qrScanController.test.ts
+          __tests__/qrValidation.test.ts
+          __tests__/qrScanPipeline.test.ts
+          __tests__/qrCodeMatrix.test.ts
+          src/attendance/qr/QrCameraFrameAdapter.test.ts
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+  android-debug:
+    needs: qr-unit-and-typecheck
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sitesync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Assemble Android debug APK
+        working-directory: sitesync/android
+        run: ./gradlew :app:assembleDebug --no-daemon
