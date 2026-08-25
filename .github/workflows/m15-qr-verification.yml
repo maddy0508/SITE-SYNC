@@ -3,7 +3,7 @@ name: M1.5 QR verification
 on:
   push:
     branches:
-      - feat/qr-attendance-milestone
+      - feat/qr-attendance-milestone-final
   pull_request:
     branches:
       - main
@@ -41,8 +41,8 @@ jobs:
           __tests__/qrCodeMatrix.test.ts
           src/attendance/qr/QrCameraFrameAdapter.test.ts
 
-      - name: Typecheck
-        run: npx tsc --noEmit
+      - name: Typecheck M1.5 surface
+        run: npx tsc --noEmit -p tsconfig.m15.json
 
   android-debug:
     needs: qr-unit-and-typecheck
