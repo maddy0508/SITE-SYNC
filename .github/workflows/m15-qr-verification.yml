@@ -65,3 +65,11 @@ jobs:
       - name: Assemble Android debug APK
         working-directory: sitesync/android
         run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Upload Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: site-sync-m1.5-debug-apk
+          path: sitesync/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
