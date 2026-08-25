@@ -45,6 +45,10 @@ const raw = encodeWorkerQrPayload({
 });
 
 describe('QrScanPipeline', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('parses and validates a trusted assigned worker', async () => {
     const pipeline = new QrScanPipeline(new QrValidationService(resolver));
 
