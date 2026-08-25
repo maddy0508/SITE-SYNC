@@ -55,6 +55,7 @@ describe('QrScanPipeline', () => {
     const result = await pipeline.process(raw, context, { online: true });
 
     expect(result.kind).toBe('VALIDATION');
+    if (result.kind !== 'VALIDATION') throw new Error('Expected validation result');
     expect(result.result.status).toBe('VALID');
     expect(result.result.displayName).toBe('Jordan Morgan');
   });
