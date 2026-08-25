@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest"]
+  },
+  "include": [
+    "src/qr/**/*.ts",
+    "src/attendance/qr/**/*.ts",
+    "__tests__/qr*.test.ts",
+    "src/attendance/qr/*.test.ts"
+  ]
+}
