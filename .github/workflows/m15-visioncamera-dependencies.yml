@@ -5,6 +5,7 @@ on:
     branches:
       - mckellarmaddy/mmm-33-m15-qr-attendance
       - feat/qr-attendance-milestone
+      - feat/qr-attendance-milestone-final
     paths:
       - '.github/workflows/m15-visioncamera-dependencies.yml'
       - 'sitesync/package.json'
