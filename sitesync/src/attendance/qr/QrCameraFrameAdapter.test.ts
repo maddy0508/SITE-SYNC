@@ -1,22 +1,26 @@
 import { QrCameraFrameAdapter } from './QrCameraFrameAdapter';
+import { QrScanController } from '../../qr/qrScanController';
 
 describe('QrCameraFrameAdapter', () => {
   it('passes decoded QR values into the domain scan controller', () => {
-    const consume = jest.fn().mockReturnValue({ kind: 'VALID' });
-    const adapter = new QrCameraFrameAdapter({ consume } as never);
+    const controller = new QrScanController();
+    const accept = jest.spyOn(controller, 'accept');
+    const adapter = new QrCameraFrameAdapter(controller);
 
     const result = adapter.onFrame({ value: 'SITE-SYNC:QR:v1:worker-0248' });
 
-    expect(consume).toHaveBeenCalledWith('SITE-SYNC:QR:v1:worker-0248');
-    expect(result).toEqual({ kind: 'VALID' });
+    expect(accept).toHaveBeenCalledWith('SITE-SYNC:QR:v1:worker-0248');
+    expect(result).toBe(true);
   });
 
   it('normalizes a missing native value to an empty string', () => {
-    const consume = jest.fn().mockReturnValue({ kind: 'BLOCKED' });
-    const adapter = new QrCameraFrameAdapter({ consume } as never);
+    const controller = new QrScanController();
+    const accept = jest.spyOn(controller, 'accept');
+    const adapter = new QrCameraFrameAdapter(controller);
 
-    adapter.onFrame({ value: null });
+    const result = adapter.onFrame({ value: null });
 
-    expect(consume).toHaveBeenCalledWith('');
+    expect(accept).toHaveBeenCalledWith('');
+    expect(result).toBe(false);
   });
 });
