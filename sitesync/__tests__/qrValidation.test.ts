@@ -46,6 +46,10 @@ const resolver: QrRosterResolver = {
 };
 
 describe('QrValidationService', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   it('returns VALID for an assigned worker when online', async () => {
     const result = await new QrValidationService(resolver).validate(payload, context, { online: true });
     expect(result).toMatchObject({ status: 'VALID', personId: 'person-42', displayName: 'Jordan Morgan', provisional: false });
