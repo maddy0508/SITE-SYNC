@@ -10,22 +10,10 @@ export type NativeQrFrame = {
   value?: string | null;
 };
 
-export type AcceptedQrValueHandler = (value: string) => void;
-
 export class QrCameraFrameAdapter {
-  public constructor(
-    private readonly controller: QrScanController,
-    private readonly onAcceptedValue?: AcceptedQrValueHandler,
-  ) {}
+  public constructor(private readonly controller: QrScanController) {}
 
   public onFrame(frame: NativeQrFrame): boolean {
-    const value = frame.value ?? '';
-    const accepted = this.controller.accept(value);
-
-    if (accepted && value.trim()) {
-      this.onAcceptedValue?.(value.trim());
-    }
-
-    return accepted;
+    return this.controller.accept(frame.value ?? '');
   }
 }
