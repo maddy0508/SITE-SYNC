@@ -73,3 +73,74 @@ jobs:
           path: sitesync/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
           retention-days: 7
+
+  android-runtime-smoke:
+    needs: android-debug
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download installable APK
+        uses: actions/download-artifact@v4
+        with:
+          name: site-sync-m1.5-installable-apk
+          path: apk
+
+      - name: Start Android emulator and run scanner smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: Pixel_6
+          script: |
+            set -euo pipefail
+            APK="$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' -type f | head -n 1)"
+            test -n "$APK"
+            adb install -r "$APK"
+            adb shell pm grant com.sitesync android.permission.CAMERA || true
+            adb shell am force-stop com.sitesync
+            adb shell monkey -p com.sitesync 1
+            sleep 5
+
+            adb shell uiautomator dump /sdcard/window.xml >/dev/null
+            adb shell cat /sdcard/window.xml > window.xml
+            grep -q 'SCAN WORKER QR' window.xml
+
+            python3 - <<'PY'
+            import re
+            import subprocess
+            xml = open('window.xml', encoding='utf-8').read()
+            match = re.search(r'text="SCAN WORKER QR"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+            if not match:
+                raise SystemExit('SCAN WORKER QR control not found in UI hierarchy')
+            x1, y1, x2, y2 = map(int, match.groups())
+            x = (x1 + x2) // 2
+            y = (y1 + y2) // 2
+            subprocess.run(['adb', 'shell', 'input', 'tap', str(x), str(y)], check=True)
+            PY
+
+            sleep 6
+            if ! adb shell pidof com.sitesync >/dev/null; then
+              adb logcat -d -v threadtime > scanner-crash.log
+              cat scanner-crash.log
+              exit 1
+            fi
+
+            adb shell uiautomator dump /sdcard/scanner.xml >/dev/null
+            adb shell cat /sdcard/scanner.xml > scanner.xml
+            grep -Eq 'Scan worker QR|Camera access required|Camera unavailable' scanner.xml
+            adb logcat -d -v threadtime | tail -n 500 > scanner-smoke-logcat.txt
+
+      - name: Upload scanner diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m1.5-scanner-runtime-diagnostics
+          path: |
+            window.xml
+            scanner.xml
+            scanner-crash.log
+            scanner-smoke-logcat.txt
+          if-no-files-found: ignore
+          retention-days: 7
