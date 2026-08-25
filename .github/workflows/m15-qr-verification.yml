@@ -27,7 +27,7 @@ jobs:
           cache-dependency-path: sitesync/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Run M1.5 targeted tests
         run: >-
@@ -60,7 +60,7 @@ jobs:
           cache-dependency-path: sitesync/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Assemble self-contained Android APK
         working-directory: sitesync/android
