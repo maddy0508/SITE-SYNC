@@ -1,11 +1,18 @@
 import { IdentityService, IdentityServiceError } from '../src/identity/identityService';
 
 type Result = { data: unknown; error: { message: string } | null };
+type QueryBuilder = {
+  select: jest.Mock<QueryBuilder, []>;
+  eq: jest.Mock<QueryBuilder, [string, unknown]>;
+  maybeSingle: jest.Mock<Promise<Result>, []>;
+  then: (resolve: (value: Result) => unknown) => Promise<unknown>;
+};
 
 function createMockClient(rows: Record<string, Result>) {
-  const from = jest.fn((table: string) => {
+  const from = jest.fn((table: string): QueryBuilder => {
     const result = rows[table] ?? { data: [], error: null };
-    const builder = {
+    let builder: QueryBuilder;
+    builder = {
       select: jest.fn(() => builder),
       eq: jest.fn(() => builder),
       maybeSingle: jest.fn(async () => result),
