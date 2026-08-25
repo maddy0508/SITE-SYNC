@@ -29,6 +29,33 @@ export function QrScannerScreen({
   const controller = useMemo(() => new QrScanController(), []);
   const adapter = useMemo(() => new QrCameraFrameAdapter(controller), [controller]);
 
+  useEffect(() => {
+    const permissionState = resolveQrPermissionState(status, canRequestPermission);
+    setCameraState((current) => {
+      if (permissionState === 'permission_blocked' || permissionState === 'requesting_permission') {
+        return permissionState;
+      }
+      if (hasPermission && (current === 'idle' || current === 'requesting_permission')) {
+        return 'ready';
+      }
+      return permissionState;
+    });
+  }, [status, canRequestPermission, hasPermission]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      const nextIsActive = nextState === 'active';
+      setAppIsActive(nextIsActive);
+      if (!nextIsActive) {
+        controller.reset();
+        setCameraState('idle');
+      } else if (hasPermission) {
+        setCameraState('ready');
+      }
+    });
+    return () => subscription.remove();
+  }, [controller, hasPermission]);
+
   const handleBarcodes = (barcodes: Array<{ rawValue?: string | null }>) => {
     const rawValue = barcodes.find((barcode) => barcode.rawValue)?.rawValue;
     if (!rawValue || !adapter.onFrame({ value: rawValue })) return;
@@ -54,18 +81,6 @@ export function QrScannerScreen({
     },
   });
 
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState) => {
-      setAppIsActive(nextState === 'active');
-      if (nextState !== 'active') controller.reset();
-    });
-    return () => subscription.remove();
-  }, [controller]);
-
-  useEffect(() => {
-    setCameraState(resolveQrPermissionState(status, canRequestPermission));
-  }, [status, canRequestPermission]);
-
   const isScanning = active && appIsActive && hasPermission && cameraState === 'ready' && device != null;
   const hasResult = cameraState === 'valid' || cameraState === 'provisional' || cameraState === 'blocked';
 
@@ -82,7 +97,9 @@ export function QrScannerScreen({
             onPress={() => {
               if (canRequestPermission) {
                 setCameraState('requesting_permission');
-                void requestPermission();
+                void requestPermission().then(() => {
+                  if (hasPermission) setCameraState('ready');
+                });
               } else {
                 void Linking.openSettings();
               }
