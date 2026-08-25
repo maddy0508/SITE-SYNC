@@ -38,7 +38,7 @@ function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor={styles.safeArea.backgroundColor} />
+      <StatusBar barStyle="light-content" backgroundColor="#10182B" />
       <View style={styles.container}>
         <View style={styles.brandBlock}>
           <Text style={styles.eyebrow}>SITE-SYNC</Text>
