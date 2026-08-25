@@ -21,7 +21,6 @@ function App() {
           onQrValue={async (value) => {
             setLastScan(value);
             setMode('home');
-            return 'valid';
           }}
         />
         <Pressable
@@ -53,7 +52,7 @@ function App() {
           <View style={styles.statusCopy}>
             <Text style={styles.statusTitle}>SCANNER READY</Text>
             <Text style={styles.statusBody}>
-              Camera permission and QR scanning are available from the scanner.
+              The M1.5 camera path is available for worker QR capture.
             </Text>
           </View>
         </View>
@@ -77,7 +76,7 @@ function App() {
         </Pressable>
 
         <Text style={styles.footer}>
-          QR payloads remain untrusted until validated against the active project context.
+          Capture is separate from attendance acceptance; QR data remains untrusted until validation.
         </Text>
       </View>
     </SafeAreaView>
