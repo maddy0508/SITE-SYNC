@@ -4,6 +4,9 @@ import type { WorkerQrPayload } from '../../qr/qrPayload';
 import { encodeWorkerQrPayload } from '../../qr/qrPayload';
 import { buildQrMatrix } from '../../qr/qrCodeMatrix';
 
+const QR_CELL_SIZE = 5;
+const QR_QUIET_ZONE_MODULES = 4;
+
 export type WorkerQrDisplayProps = {
   displayName: string;
   workerPayload: WorkerQrPayload;
@@ -58,7 +61,7 @@ const styles = StyleSheet.create({
   },
   qrFrame: {
     marginTop: 18,
-    padding: 12,
+    padding: QR_CELL_SIZE * QR_QUIET_ZONE_MODULES,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1,
@@ -71,8 +74,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   qrCell: {
-    width: 5,
-    height: 5,
+    width: QR_CELL_SIZE,
+    height: QR_CELL_SIZE,
   },
   qrDark: {
     backgroundColor: '#10182B',
