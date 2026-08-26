@@ -51,14 +51,14 @@ export function QrScannerScreen({
       const nextIsActive = nextState === 'active';
       setAppIsActive(nextIsActive);
       if (!nextIsActive) {
-        controller.reset();
+        adapter.reset();
         dispatch({ type: 'APPROACH_INACTIVE' });
       } else if (hasPermission) {
         dispatch({ type: 'APPROACH_ACTIVE' });
       }
     });
     return () => subscription.remove();
-  }, [controller, hasPermission]);
+  }, [adapter, hasPermission]);
 
   const handleBarcodes = (barcodes: Array<{ rawValue?: string | null }>) => {
     const rawValue = barcodes.find((barcode) => barcode.rawValue)?.rawValue;
@@ -74,9 +74,11 @@ export function QrScannerScreen({
         else dispatch({ type: 'RESET' });
       })
       .catch((error: unknown) => {
-        controller.reset();
         dispatch({ type: 'ERROR' });
         setCameraError(error instanceof Error ? error.message : 'QR processing failed');
+      })
+      .finally(() => {
+        adapter.release();
       });
   };
 
@@ -84,7 +86,7 @@ export function QrScannerScreen({
     barcodeFormats: ['qr-code'],
     onBarcodeScanned: handleBarcodes,
     onError: (error) => {
-      controller.reset();
+      adapter.reset();
       dispatch({ type: 'ERROR' });
       setCameraError(error.message);
     },
@@ -150,7 +152,7 @@ export function QrScannerScreen({
         <Pressable
           accessibilityRole="button"
           onPress={() => {
-            controller.reset();
+            adapter.reset();
             setCameraError(null);
             dispatch({ type: 'RESET' });
             if (hasPermission) dispatch({ type: 'PERMISSION_GRANTED' });
