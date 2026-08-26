@@ -92,12 +92,13 @@ jobs:
         with:
           api-level: 35
           arch: x86_64
-          profile: Pixel_6
+          profile: pixel_2
           script: |
             set -euo pipefail
             APK="$(find "$GITHUB_WORKSPACE/apk" -name '*.apk' -type f | head -n 1)"
             test -n "$APK"
             adb install -r "$APK"
+            test "$(adb shell pm path com.sitesync | head -n 1)" != ""
             adb shell pm grant com.sitesync android.permission.CAMERA || true
             adb shell am force-stop com.sitesync
             adb shell monkey -p com.sitesync 1
