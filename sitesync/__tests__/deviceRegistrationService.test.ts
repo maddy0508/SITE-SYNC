@@ -17,42 +17,27 @@ function createMockClient() {
         return builder;
       }),
       maybeSingle: jest.fn(async () => {
-        const rows = [...state.values()].filter((row) =>
-          Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value),
-        );
+        const rows = [...state.values()].filter((row) => Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value));
         return { data: rows[0] ?? null, error: null };
       }),
       single: jest.fn(async () => {
-        const rows = [...state.values()].filter((row) =>
-          Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value),
-        );
+        const rows = [...state.values()].filter((row) => Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value));
         return { data: rows[0] ?? null, error: null };
       }),
       insert: jest.fn((payload: any) => {
-        const row = {
-          id: INSTALLATION_ID,
-          created_at: '2026-08-17T10:00:00.000+00:00',
-          ...payload,
-          last_seen_at: payload.last_seen_at ?? '2026-08-17T10:00:00.000+00:00',
-          revoked_at: null,
-        };
+        const row = { id: INSTALLATION_ID, created_at: '2026-08-17T10:00:00.000+00:00', ...payload, last_seen_at: payload.last_seen_at ?? '2026-08-17T10:00:00.000+00:00', revoked_at: null };
         state.set(row.id, row);
         builder.inserted = row;
         return builder;
       }),
       update: jest.fn((payload: any) => {
-        for (const row of state.values()) {
-          if (Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value)) {
-            Object.assign(row, payload);
-          }
-        }
+        for (const row of state.values()) if (Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value)) Object.assign(row, payload);
         return builder;
       }),
       then: (resolve: (value: any) => unknown) => builder.maybeSingle().then(resolve),
     };
     return builder;
   });
-
   return { from, state };
 }
 
@@ -74,35 +59,20 @@ describe('DeviceRegistrationService', () => {
     const client = createMockClient();
     const local = createLocalPersistence();
     const service = new DeviceRegistrationService(client as never, local);
-
-    const result = await service.register(USER_A, {
-      installationKey: INSTALLATION_KEY,
-      deviceName: 'Worker phone',
-      appVersion: '1.0.0',
-      osVersion: 'Android 16',
-      now: NOW,
-    });
-
+    const result = await service.register(USER_A, { installationKey: INSTALLATION_KEY, deviceName: 'Worker phone', appVersion: '1.0.0', osVersion: 'Android 16', now: NOW });
     expect(result.userId).toBe(USER_A);
     expect(result.status).toBe('ACTIVE');
     expect(result.createdAt).toBe(NOW);
     expect(client.state.get(INSTALLATION_ID).user_id).toBe(USER_A);
-    expect(local.insertLocalDeviceSession).toHaveBeenCalledWith(expect.objectContaining({
-      userId: USER_A,
-      deviceInstallationId: INSTALLATION_ID,
-      installationKey: INSTALLATION_KEY,
-      status: 'ACTIVE',
-    }));
+    expect(local.insertLocalDeviceSession).toHaveBeenCalledWith(expect.objectContaining({ userId: USER_A, deviceInstallationId: INSTALLATION_ID, installationKey: INSTALLATION_KEY, status: 'ACTIVE' }));
   });
 
   it('is idempotent for the same authenticated user and installation key', async () => {
     const client = createMockClient();
     const local = createLocalPersistence();
     const service = new DeviceRegistrationService(client as never, local);
-
     const first = await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
     const second = await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: '2026-08-17T10:01:00.000Z' });
-
     expect(second.id).toBe(first.id);
     expect(local.insertLocalDeviceSession).toHaveBeenCalledTimes(1);
   });
@@ -111,12 +81,8 @@ describe('DeviceRegistrationService', () => {
     const client = createMockClient();
     const local = createLocalPersistence();
     const service = new DeviceRegistrationService(client as never, local);
-
     await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
-
-    await expect(service.register(USER_A, { installationKey: 'different-key', now: NOW })).rejects.toMatchObject({
-      code: 'LOCAL_DEVICE_CONFLICT',
-    });
+    await expect(service.register(USER_A, { installationKey: 'different-key', now: NOW })).rejects.toMatchObject({ code: 'LOCAL_DEVICE_CONFLICT' });
     expect(client.state.size).toBe(1);
   });
 
@@ -124,52 +90,69 @@ describe('DeviceRegistrationService', () => {
     const client = createMockClient();
     const local = createLocalPersistence();
     const service = new DeviceRegistrationService(client as never, local);
-
     await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
     const revoked = await service.revoke(USER_A, 1, '2026-08-17T10:02:00.000Z');
-
     expect(revoked.status).toBe('REVOKED');
+    expect(revoked.revokedAt).toBe('2026-08-17T10:02:00.000Z');
     expect(client.state.get(INSTALLATION_ID).status).toBe('REVOKED');
     await expect(service.revoke(USER_A, 2, '2026-08-17T10:03:00.000Z')).rejects.toMatchObject({ code: 'INVALID_LIFECYCLE' });
+  });
+
+  it('returns only an active authoritative installation from get()', async () => {
+    const client = createMockClient();
+    const local = createLocalPersistence();
+    const service = new DeviceRegistrationService(client as never, local);
+    await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
+    const result = await service.get(USER_A);
+    expect(result?.status).toBe('ACTIVE');
+    const queryBuilder = client.from.mock.results.at(-1)?.value;
+    expect(queryBuilder.filters.status).toBe('ACTIVE');
+  });
+
+  it('does not resolve a revoked installation as authoritative', async () => {
+    const client = createMockClient();
+    const local = createLocalPersistence();
+    const service = new DeviceRegistrationService(client as never, local);
+    await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
+    await service.revoke(USER_A, 1, '2026-08-17T10:02:00.000Z');
+    await expect(service.get(USER_A)).resolves.toBeNull();
+  });
+
+  it('rejects non-normalized revocation timestamps before touching Supabase', async () => {
+    const client = createMockClient();
+    const local = createLocalPersistence();
+    const service = new DeviceRegistrationService(client as never, local);
+    await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
+    await expect(service.revoke(USER_A, 1, '2026-08-17T10:02:00Z')).rejects.toMatchObject({ code: 'INVALID_INPUT' });
+    expect(client.state.get(INSTALLATION_ID).status).toBe('ACTIVE');
+  });
+
+  it('rejects a malformed ACTIVE server row with revoked_at', async () => {
+    const client = createMockClient();
+    const local = createLocalPersistence();
+    const service = new DeviceRegistrationService(client as never, local);
+    client.state.set(INSTALLATION_ID, { id: INSTALLATION_ID, user_id: USER_A, installation_key: INSTALLATION_KEY, status: 'ACTIVE', created_at: NOW, last_seen_at: NOW, revoked_at: '2026-08-17T10:02:00.000Z' });
+    await expect(service.get(USER_A)).rejects.toMatchObject({ code: 'INVALID_LIFECYCLE' });
   });
 
   it('surfaces optimistic revision mismatch', async () => {
     const client = createMockClient();
     const local = createLocalPersistence();
     const service = new DeviceRegistrationService(client as never, local);
-
     await service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW });
-
-    await expect(service.revoke(USER_A, 99, '2026-08-17T10:02:00.000Z')).rejects.toMatchObject({
-      code: 'REVISION_MISMATCH',
-    });
+    await expect(service.revoke(USER_A, 99, '2026-08-17T10:02:00.000Z')).rejects.toMatchObject({ code: 'REVISION_MISMATCH' });
   });
 
   it('rejects a server response that attempts to bind the installation to another user', async () => {
     const client = createMockClient();
     const local = createLocalPersistence();
     const service = new DeviceRegistrationService(client as never, local);
-
     const originalFrom = client.from;
     client.from = jest.fn(() => {
       const builder: any = originalFrom();
-      builder.single = jest.fn(async () => ({
-        data: {
-          id: INSTALLATION_ID,
-          user_id: USER_B,
-          installation_key: INSTALLATION_KEY,
-          status: 'ACTIVE',
-          created_at: NOW,
-          last_seen_at: NOW,
-          revoked_at: null,
-        },
-        error: null,
-      }));
+      builder.single = jest.fn(async () => ({ data: { id: INSTALLATION_ID, user_id: USER_B, installation_key: INSTALLATION_KEY, status: 'ACTIVE', created_at: NOW, last_seen_at: NOW, revoked_at: null }, error: null }));
       return builder;
     }) as never;
-
-    await expect(service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW })).rejects.toMatchObject({
-      code: 'CROSS_USER_ACCESS',
-    });
+    await expect(service.register(USER_A, { installationKey: INSTALLATION_KEY, now: NOW })).rejects.toMatchObject({ code: 'CROSS_USER_ACCESS' });
   });
 });

@@ -23,43 +23,43 @@ function clientWith(overrides: Record<string, unknown>) {
 describe('AuthService', () => {
   it('restores an existing session', async () => {
     const client = clientWith({ getSession: jest.fn(async () => ({ data: { session }, error: null })) });
-
     await expect(new AuthService(client as never).restoreSession()).resolves.toBe(session);
   });
 
   it('rejects when there is no session', async () => {
     const client = clientWith({ getSession: jest.fn(async () => ({ data: { session: null }, error: null })) });
-
     await expect(new AuthService(client as never).restoreSession()).rejects.toMatchObject({ code: 'NO_SESSION' });
   });
 
-  it('signs in with password and requires a returned session', async () => {
-    const client = clientWith({
-      signInWithPassword: jest.fn(async () => ({ data: { session }, error: null })),
-    });
+  it('maps getSession failures to AUTH_FAILED', async () => {
+    const client = clientWith({ getSession: jest.fn(async () => ({ data: { session: null }, error: { message: 'session lookup failed' } })) });
+    await expect(new AuthService(client as never).getCurrentSession()).rejects.toMatchObject({ code: 'AUTH_FAILED', message: 'session lookup failed' });
+  });
 
+  it('signs in with password and requires a returned session', async () => {
+    const client = clientWith({ signInWithPassword: jest.fn(async () => ({ data: { session }, error: null })) });
     await expect(new AuthService(client as never).signIn('worker@example.com', 'password')).resolves.toBe(session);
-    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({
-      email: 'worker@example.com',
-      password: 'password',
-    });
+    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({ email: 'worker@example.com', password: 'password' });
   });
 
   it('maps auth failures to a typed error', async () => {
-    const client = clientWith({
-      signInWithPassword: jest.fn(async () => ({ data: { session: null }, error: { message: 'Invalid login credentials' } })),
-    });
+    const client = clientWith({ signInWithPassword: jest.fn(async () => ({ data: { session: null }, error: { message: 'Invalid login credentials' } })) });
+    await expect(new AuthService(client as never).signIn('worker@example.com', 'wrong')).rejects.toMatchObject({ code: 'AUTH_FAILED', message: 'Invalid login credentials' });
+  });
 
-    await expect(new AuthService(client as never).signIn('worker@example.com', 'wrong')).rejects.toMatchObject({
-      code: 'AUTH_FAILED',
-      message: 'Invalid login credentials',
-    });
+  it('rejects a successful sign-in response that contains no session', async () => {
+    const client = clientWith({ signInWithPassword: jest.fn(async () => ({ data: { session: null }, error: null })) });
+    await expect(new AuthService(client as never).signIn('worker@example.com', 'password')).rejects.toMatchObject({ code: 'NO_SESSION' });
   });
 
   it('signs out through Supabase', async () => {
     const client = clientWith({ signOut: jest.fn(async () => ({ error: null })) });
-
     await new AuthService(client as never).signOut();
     expect(client.auth.signOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps sign-out failures to SIGN_OUT_FAILED', async () => {
+    const client = clientWith({ signOut: jest.fn(async () => ({ error: { message: 'sign-out failed' } })) });
+    await expect(new AuthService(client as never).signOut()).rejects.toMatchObject({ code: 'SIGN_OUT_FAILED', message: 'sign-out failed' });
   });
 });

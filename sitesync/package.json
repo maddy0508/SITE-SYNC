@@ -7,9 +7,7 @@
     "ios": "react-native run-ios",
     "lint": "eslint .",
     "start": "react-native start",
-    "test": "jest",
-    "test:phase2": "node supabase/tests/run-phase2.mjs",
-    "test:phase2:doctor": "node supabase/tests/run-phase2.mjs --doctor"
+    "test": "jest"
   },
   "dependencies": {
     "@op-engineering/op-sqlite": "^17.1.3",
