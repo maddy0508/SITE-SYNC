@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useReducer, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import { useBarcodeScannerOutput } from 'react-native-vision-camera-barcode-scanner';
 import { QrCameraFrameAdapter } from './QrCameraFrameAdapter';
 import { QrScanController } from '../../qr/qrScanController';
 import { resolveQrPermissionState } from '../../qr/qrCameraPermission';
-import type { QrCameraState } from '../../qr/qrCameraState';
+import { reduceQrCameraState } from '../../qr/qrCameraState';
+import type { QrCameraEvent, QrCameraState } from '../../qr/qrCameraState';
 
 export type QrScanOutcomeState = Extract<QrCameraState, 'valid' | 'provisional' | 'blocked'>;
 
@@ -23,7 +24,10 @@ export function QrScannerScreen({
   const { hasPermission, requestPermission, status, canRequestPermission } = useCameraPermission();
   const device = useCameraDevice('back', { physicalDevices: ['wide-angle-camera'] });
   const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
-  const [cameraState, setCameraState] = useState<QrCameraState>('idle');
+  const [cameraState, dispatch] = useReducer(
+    (state: QrCameraState, event: QrCameraEvent) => reduceQrCameraState(state, event),
+    'idle',
+  );
   const [cameraError, setCameraError] = useState<string | null>(null);
 
   const controller = useMemo(() => new QrScanController(), []);
@@ -31,15 +35,15 @@ export function QrScannerScreen({
 
   useEffect(() => {
     const permissionState = resolveQrPermissionState(status, canRequestPermission);
-    setCameraState((current) => {
-      if (permissionState === 'permission_blocked' || permissionState === 'requesting_permission') {
-        return permissionState;
-      }
-      if (hasPermission && (current === 'idle' || current === 'requesting_permission')) {
-        return 'ready';
-      }
-      return permissionState;
-    });
+    if (permissionState === 'permission_blocked') {
+      dispatch({ type: 'PERMISSION_BLOCKED' });
+    } else if (permissionState === 'requesting_permission') {
+      dispatch({ type: 'REQUEST_PERMISSION' });
+    } else if (hasPermission) {
+      dispatch({ type: 'PERMISSION_GRANTED' });
+    } else {
+      dispatch({ type: 'PERMISSION_DENIED' });
+    }
   }, [status, canRequestPermission, hasPermission]);
 
   useEffect(() => {
@@ -48,9 +52,9 @@ export function QrScannerScreen({
       setAppIsActive(nextIsActive);
       if (!nextIsActive) {
         controller.reset();
-        setCameraState('idle');
+        dispatch({ type: 'APPROACH_INACTIVE' });
       } else if (hasPermission) {
-        setCameraState('ready');
+        dispatch({ type: 'APPROACH_ACTIVE' });
       }
     });
     return () => subscription.remove();
@@ -61,12 +65,17 @@ export function QrScannerScreen({
     if (!rawValue || !adapter.onFrame({ value: rawValue })) return;
 
     setCameraError(null);
-    setCameraState('processing');
+    dispatch({ type: 'QR_DETECTED' });
     void Promise.resolve(onQrValue(rawValue.trim()))
-      .then((outcome) => setCameraState(outcome ?? 'ready'))
+      .then((outcome) => {
+        if (outcome === 'valid') dispatch({ type: 'VALID' });
+        else if (outcome === 'provisional') dispatch({ type: 'PROVISIONAL' });
+        else if (outcome === 'blocked') dispatch({ type: 'BLOCKED' });
+        else dispatch({ type: 'RESET' });
+      })
       .catch((error: unknown) => {
         controller.reset();
-        setCameraState('error');
+        dispatch({ type: 'ERROR' });
         setCameraError(error instanceof Error ? error.message : 'QR processing failed');
       });
   };
@@ -76,7 +85,7 @@ export function QrScannerScreen({
     onBarcodeScanned: handleBarcodes,
     onError: (error) => {
       controller.reset();
-      setCameraState('error');
+      dispatch({ type: 'ERROR' });
       setCameraError(error.message);
     },
   });
@@ -96,10 +105,8 @@ export function QrScannerScreen({
             accessibilityRole="button"
             onPress={() => {
               if (canRequestPermission) {
-                setCameraState('requesting_permission');
-                void requestPermission().then(() => {
-                  if (hasPermission) setCameraState('ready');
-                });
+                dispatch({ type: 'REQUEST_PERMISSION' });
+                void requestPermission();
               } else {
                 void Linking.openSettings();
               }
@@ -145,7 +152,8 @@ export function QrScannerScreen({
           onPress={() => {
             controller.reset();
             setCameraError(null);
-            setCameraState('ready');
+            dispatch({ type: 'RESET' });
+            if (hasPermission) dispatch({ type: 'PERMISSION_GRANTED' });
           }}
           style={styles.resetButton}
         >
