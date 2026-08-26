@@ -1,12 +1,13 @@
 export type Clock = () => number;
 
 /**
- * Guards the native QR callback boundary from repeated frames and empty decoder values.
+ * Guards the native QR callback boundary from repeated frames and concurrent processing.
  * It is intentionally UI/native-library agnostic so the lifecycle can be tested without a camera.
  */
 export class QrScanController {
   private lastValue: string | null = null;
   private lastAcceptedAt = 0;
+  private processing = false;
 
   constructor(
     private readonly suppressionWindowMs = 750,
@@ -15,7 +16,7 @@ export class QrScanController {
 
   accept(value: string | undefined): boolean {
     const normalized = value?.trim();
-    if (!normalized) return false;
+    if (!normalized || this.processing) return false;
 
     const currentTime = this.now();
     if (
@@ -27,11 +28,17 @@ export class QrScanController {
 
     this.lastValue = normalized;
     this.lastAcceptedAt = currentTime;
+    this.processing = true;
     return true;
+  }
+
+  release(): void {
+    this.processing = false;
   }
 
   reset(): void {
     this.lastValue = null;
     this.lastAcceptedAt = 0;
+    this.processing = false;
   }
 }
