@@ -7,11 +7,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { QrScannerScreen } from './src/attendance/qr/QrScannerScreen';
+import { QrScannerScreen, type QrScanOutcomeState } from './src/attendance/qr/QrScannerScreen';
 
-function App() {
+export type AppProps = {
+  onQrValue?: (value: string) => void | QrScanOutcomeState | Promise<void | QrScanOutcomeState>;
+};
+
+function App({ onQrValue }: AppProps) {
   const [mode, setMode] = useState<'home' | 'scanner'>('home');
-  const [lastScan, setLastScan] = useState<string | null>(null);
 
   if (mode === 'scanner') {
     return (
@@ -19,8 +22,13 @@ function App() {
         <StatusBar barStyle="light-content" />
         <QrScannerScreen
           onQrValue={async (value) => {
-            setLastScan(value);
-            setMode('home');
+            if (!onQrValue) {
+              throw new Error('QR validation context is unavailable; no scan result was accepted.');
+            }
+
+            const outcome = await onQrValue(value);
+            if (outcome) setMode('home');
+            return outcome;
           }}
         />
         <Pressable
@@ -52,19 +60,10 @@ function App() {
           <View style={styles.statusCopy}>
             <Text style={styles.statusTitle}>SCANNER READY</Text>
             <Text style={styles.statusBody}>
-              The M1.5 camera path is available for worker QR capture.
+              QR capture is isolated from attendance acceptance and cannot be accepted without trusted validation context.
             </Text>
           </View>
         </View>
-
-        {lastScan ? (
-          <View style={styles.resultCard}>
-            <Text style={styles.resultEyebrow}>LAST CAPTURE</Text>
-            <Text numberOfLines={3} style={styles.resultText}>
-              {lastScan}
-            </Text>
-          </View>
-        ) : null}
 
         <Pressable
           accessibilityRole="button"
@@ -76,7 +75,7 @@ function App() {
         </Pressable>
 
         <Text style={styles.footer}>
-          Capture is separate from attendance acceptance; QR data remains untrusted until validation.
+          Untrusted QR data is never displayed or accepted as an attendance result.
         </Text>
       </View>
     </SafeAreaView>
@@ -148,24 +147,6 @@ const styles = StyleSheet.create({
   statusBody: {
     marginTop: 5,
     color: '#9EAAC0',
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  resultCard: {
-    marginTop: 16,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  resultEyebrow: {
-    color: '#6E7890',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.4,
-  },
-  resultText: {
-    marginTop: 7,
-    color: '#10182B',
     fontSize: 13,
     lineHeight: 18,
   },
