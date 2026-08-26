@@ -2,8 +2,8 @@ import { QrScanController } from '../../qr/qrScanController';
 
 /**
  * Thin adapter boundary between a native QR camera callback and the
- * domain-owned duplicate-frame controller. Native camera libraries should
- * call this adapter; they must not bypass parser/validation or mutate
+ * domain-owned duplicate/concurrency controller. Native camera libraries
+ * should call this adapter; they must not bypass parser/validation or mutate
  * attendance state.
  */
 export type NativeQrFrame = {
@@ -15,5 +15,13 @@ export class QrCameraFrameAdapter {
 
   public onFrame(frame: NativeQrFrame): boolean {
     return this.controller.accept(frame.value ?? '');
+  }
+
+  public release(): void {
+    this.controller.release();
+  }
+
+  public reset(): void {
+    this.controller.reset();
   }
 }
