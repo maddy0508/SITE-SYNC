@@ -26,20 +26,14 @@ jobs:
           cache: npm
           cache-dependency-path: sitesync/package-lock.json
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies from lockfile
+        run: npm ci
 
-      - name: Run M1.5 targeted tests
-        run: >-
-          npm test -- --runInBand
-          __tests__/qrCameraState.test.ts
-          __tests__/qrCameraPermission.test.ts
-          __tests__/qrPayload.test.ts
-          __tests__/qrScanController.test.ts
-          __tests__/qrValidation.test.ts
-          __tests__/qrScanPipeline.test.ts
-          __tests__/qrCodeMatrix.test.ts
-          src/attendance/qr/QrCameraFrameAdapter.test.ts
+      - name: Run full Jest suite
+        run: npm test -- --runInBand
+
+      - name: Typecheck full application
+        run: npx tsc --noEmit
 
       - name: Typecheck M1.5 surface
         run: npx tsc --noEmit -p tsconfig.m15.json
@@ -59,8 +53,8 @@ jobs:
           cache: npm
           cache-dependency-path: sitesync/package-lock.json
 
-      - name: Install dependencies
-        run: npm install
+      - name: Install dependencies from lockfile
+        run: npm ci
 
       - name: Assemble self-contained Android APK
         working-directory: sitesync/android
