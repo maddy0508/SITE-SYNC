@@ -1,4 +1,4 @@
-const Database = require('better-sqlite3');
+const { DatabaseSync } = require('node:sqlite');
 const path = require('path');
 const fs = require('fs');
 
@@ -16,9 +16,9 @@ class MockDB {
     this.name = name;
     const dbPath = path.join(testDbDir, `${name}.sqlite`);
 
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.pragma('foreign_keys = ON');
+    this.db = new DatabaseSync(dbPath);
+    this.db.exec('PRAGMA journal_mode = WAL;');
+    this.db.exec('PRAGMA foreign_keys = ON;');
     this.isOpen = true;
   }
 
@@ -30,7 +30,7 @@ class MockDB {
     try {
       const stmt = this.db.prepare(sql);
 
-      if (stmt.reader) {
+      if (stmt.columns().length > 0) {
         return {
           rows: stmt.all(...params),
           rowsAffected: 0,
@@ -41,8 +41,8 @@ class MockDB {
 
       return {
         rows: [],
-        rowsAffected: info.changes,
-        insertId: info.lastInsertRowid,
+        rowsAffected: Number(info.changes),
+        insertId: Number(info.lastInsertRowid),
       };
     } catch (error) {
       throw new Error(`SQL Error: ${error.message}\nSQL: ${sql}`);
@@ -68,7 +68,7 @@ class MockDB {
       try {
         this.db.exec('ROLLBACK');
       } catch (_) {
-        // Ignore rollback errors while preserving the original failure.
+        // Preserve the original transaction error.
       }
       throw error;
     }
@@ -84,7 +84,7 @@ class MockDB {
   }
 }
 
-export const open = jest.fn().mockImplementation(({ name }) => {
+const open = jest.fn().mockImplementation(({ name }) => {
   const key = name || `test-db-${dbCounter++}`;
   const existing = openedDatabases.get(key);
 
@@ -98,7 +98,7 @@ export const open = jest.fn().mockImplementation(({ name }) => {
   return db;
 });
 
-export const close = jest.fn().mockImplementation(async (db) => {
+const close = jest.fn().mockImplementation(async (db) => {
   if (db && typeof db.closeAsync === 'function') {
     return db.closeAsync();
   }
@@ -106,7 +106,11 @@ export const close = jest.fn().mockImplementation(async (db) => {
   return true;
 });
 
-export default {
+module.exports = {
   open,
   close,
+  default: {
+    open,
+    close,
+  },
 };
