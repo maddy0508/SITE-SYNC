@@ -1,0 +1,48 @@
+name: M1.5 verification
+
+on:
+  push:
+    branches:
+      - mckellarmaddy/mmm-33-m15-qr-attendance
+    paths:
+      - 'sitesync/**'
+      - '.github/workflows/m15-verify.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'sitesync/**'
+      - '.github/workflows/m15-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sitesync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+
+      - name: Require committed lockfile
+        run: test -s package-lock.json
+
+      - name: Install exact dependency graph
+        run: npm ci --ignore-scripts
+
+      - name: Run M1.5 Jest suite
+        run: npm test -- --runInBand
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npm run lint
