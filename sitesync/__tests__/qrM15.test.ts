@@ -4,6 +4,7 @@ import { encodeWorkerQrPayload, parseWorkerQrPayload } from '../src/qr/qrPayload
 import { QrValidationService } from '../src/qr/qrValidation';
 import type { ProjectContextRecord, ProjectRosterRecord } from '../src/domain/localPersistence';
 import type { WorkerQrPayload } from '../src/qr/qrPayload';
+import { QrCameraFrameAdapter } from '../src/qr/qrCameraFrameAdapter';
 
 describe('M1.5 QR payload', () => {
   const payload: WorkerQrPayload = {
@@ -144,5 +145,18 @@ describe('M1.5 QR camera lifecycle', () => {
     expect(controller.accept('SITE-SYNC:1|x=y')).toBe(true);
     controller.reset();
     expect(controller.accept('SITE-SYNC:1|x=y')).toBe(true);
+  });
+
+  test('routes native frame values through the duplicate guard', () => {
+    let now = 5_000;
+    const controller = new QrScanController(750, () => now);
+    const adapter = new QrCameraFrameAdapter(controller);
+
+    expect(adapter.handle({ rawValue: 'SITE-SYNC:1|org=o|company=c|person=p|membership=m' })).toBe(true);
+    now += 100;
+    expect(adapter.handle({ displayValue: 'SITE-SYNC:1|org=o|company=c|person=p|membership=m' })).toBe(false);
+    now += 800;
+    expect(adapter.handle({ rawValue: 'SITE-SYNC:1|org=o|company=c|person=p|membership=m' })).toBe(true);
+    expect(adapter.handle({})).toBe(false);
   });
 });
