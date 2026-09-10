@@ -22,7 +22,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '22.13.0'
+          node-version: '22.14.0'
           cache: npm
           cache-dependency-path: sitesync/package-lock.json
 
