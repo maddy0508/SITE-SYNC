@@ -15,6 +15,7 @@ export interface QrScannerScreenProps {
   context: ProjectContextRecord;
   resolver: QrRosterResolver;
   online: boolean;
+  isFocused?: boolean;
   onScanAccepted?: (result: QrValidationResult) => void;
 }
 
@@ -46,7 +47,7 @@ function getMessage(state: QrCameraState, error: Error | null, result: QrValidat
     case 'provisional':
       return { title: 'Offline — provisional', body: result?.displayName ? `${result.displayName} was matched against trusted cached data. Do not treat this as server-verified.` : 'The QR code was matched against trusted cached data only.' };
     case 'blocked':
-      return { title: 'Scan blocked', body: result?.reason ? BLOCK_REASON_MESSAGES[result.reason] ?? 'The QR code failed validation.' : 'The QR code failed validation. No attendance action was created.' };
+      return { title: 'Scan blocked', body: result?.reason ? BLOCK_REASON_MESSAGES[result.reason] ?? 'The QR code failed validation.' : error instanceof QrParseError ? `Invalid QR code: ${error.message}.` : error?.message || 'The QR code failed validation. No attendance action was created.' };
     case 'error':
       return { title: 'Scanner error', body: error?.message || 'The camera scanner encountered an error.' };
     default:
@@ -54,7 +55,7 @@ function getMessage(state: QrCameraState, error: Error | null, result: QrValidat
   }
 }
 
-export function QrScannerScreen({ context, resolver, online, onScanAccepted }: QrScannerScreenProps) {
+export function QrScannerScreen({ context, resolver, online, isFocused = true, onScanAccepted }: QrScannerScreenProps) {
   const { hasPermission, canRequestPermission, requestPermission } = useCameraPermission();
   const [cameraState, setCameraState] = useState<QrCameraState>('idle');
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
@@ -79,7 +80,11 @@ export function QrScannerScreen({ context, resolver, online, onScanAccepted }: Q
       setCameraState((current) => reduceQrCameraState(current, { type: 'PERMISSION_GRANTED' }));
       return;
     }
-    if (!canRequestPermission || requestingPermission.current) return;
+    if (!canRequestPermission) {
+      setCameraState('permission_blocked');
+      return;
+    }
+    if (requestingPermission.current) return;
 
     requestingPermission.current = true;
     setCameraState('requesting_permission');
@@ -100,8 +105,8 @@ export function QrScannerScreen({ context, resolver, online, onScanAccepted }: Q
     controller.reset();
     setResult(null);
     setScannerError(null);
-    setCameraState(hasPermission ? 'ready' : 'idle');
-  }, [controller, hasPermission]);
+    setCameraState(hasPermission ? 'ready' : canRequestPermission ? 'idle' : 'permission_blocked');
+  }, [canRequestPermission, controller, hasPermission]);
 
   const handleBarcodeScanned = useCallback(async (barcodes: Array<{ rawValue?: string; displayValue?: string }>) => {
     if (cameraState !== 'ready' || !barcodes.length) return;
@@ -120,14 +125,12 @@ export function QrScannerScreen({ context, resolver, online, onScanAccepted }: Q
     } catch (error: unknown) {
       setScannerError(error instanceof Error ? error : new Error(String(error)));
       setCameraState('blocked');
-      if (error instanceof QrParseError) {
-        setResult(null);
-      }
+      setResult(null);
     }
   }, [adapter, cameraState, context, onScanAccepted, online, validation]);
 
   const message = getMessage(cameraState, scannerError, result);
-  const isScanning = hasPermission && appActive && cameraState === 'ready';
+  const isScanning = hasPermission && appActive && isFocused && cameraState === 'ready';
 
   return (
     <View style={styles.screen} testID="qr-scanner-screen">
@@ -199,152 +202,33 @@ export function QrScannerScreen({ context, resolver, online, onScanAccepted }: Q
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: '#F4F6FA',
-    padding: 20,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  eyebrow: {
-    color: '#65718A',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.8,
-  },
-  heading: {
-    marginTop: 3,
-    color: '#0D1733',
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  networkBadge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
+  screen: { flex: 1, backgroundColor: '#F4F6FA', padding: 20 },
+  topBar: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 },
+  eyebrow: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.8 },
+  heading: { marginTop: 3, color: '#0D1733', fontSize: 26, fontWeight: '900', letterSpacing: 0.5 },
+  networkBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7 },
   online: { backgroundColor: '#DDF4E7' },
   offline: { backgroundColor: '#FFF0CC' },
-  networkText: {
-    color: '#0D1733',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  scannerFrame: {
-    flex: 1,
-    minHeight: 360,
-    overflow: 'hidden',
-    borderRadius: 24,
-    backgroundColor: '#0B1124',
-  },
-  cameraPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  placeholderTitle: {
-    color: '#FFFFFF',
-    fontSize: 19,
-    fontWeight: '900',
-    textAlign: 'center',
-  },
-  placeholderBody: {
-    marginTop: 8,
-    color: '#C7CFDF',
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: 'center',
-  },
-  scanTarget: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  corner: {
-    position: 'absolute',
-    width: 44,
-    height: 44,
-    borderColor: '#F3B33D',
-  },
+  networkText: { color: '#0D1733', fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+  scannerFrame: { flex: 1, minHeight: 360, overflow: 'hidden', borderRadius: 24, backgroundColor: '#0B1124' },
+  cameraPlaceholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  placeholderTitle: { color: '#FFFFFF', fontSize: 19, fontWeight: '900', textAlign: 'center' },
+  placeholderBody: { marginTop: 8, color: '#C7CFDF', fontSize: 13, lineHeight: 19, textAlign: 'center' },
+  scanTarget: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
+  corner: { position: 'absolute', width: 44, height: 44, borderColor: '#F3B33D' },
   cornerTopLeft: { top: '28%', left: '12%', borderTopWidth: 4, borderLeftWidth: 4 },
   cornerTopRight: { top: '28%', right: '12%', borderTopWidth: 4, borderRightWidth: 4 },
   cornerBottomLeft: { bottom: '28%', left: '12%', borderBottomWidth: 4, borderLeftWidth: 4 },
   cornerBottomRight: { bottom: '28%', right: '12%', borderBottomWidth: 4, borderRightWidth: 4 },
-  scanHint: {
-    position: 'absolute',
-    bottom: '21%',
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.6,
-  },
-  processingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(13, 23, 51, 0.82)',
-  },
-  processingTitle: {
-    color: '#F3B33D',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-  },
-  processingBody: {
-    marginTop: 8,
-    color: '#FFFFFF',
-    fontSize: 13,
-  },
-  statusPanel: {
-    marginTop: 14,
-    borderRadius: 20,
-    padding: 18,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#DCE2EF',
-  },
-  statusTitle: {
-    color: '#0D1733',
-    fontSize: 18,
-    fontWeight: '900',
-  },
-  statusBody: {
-    marginTop: 5,
-    color: '#59657D',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  primaryButton: {
-    marginTop: 14,
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    backgroundColor: '#F3B33D',
-  },
-  primaryButtonText: {
-    color: '#0D1733',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  secondaryButton: {
-    marginTop: 14,
-    borderRadius: 12,
-    paddingVertical: 13,
-    alignItems: 'center',
-    backgroundColor: '#0D1733',
-  },
-  secondaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
+  scanHint: { position: 'absolute', bottom: '21%', color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
+  processingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13, 23, 51, 0.82)' },
+  processingTitle: { color: '#F3B33D', fontSize: 14, fontWeight: '900', letterSpacing: 1.5 },
+  processingBody: { marginTop: 8, color: '#FFFFFF', fontSize: 13 },
+  statusPanel: { marginTop: 14, borderRadius: 20, padding: 18, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE2EF' },
+  statusTitle: { color: '#0D1733', fontSize: 18, fontWeight: '900' },
+  statusBody: { marginTop: 5, color: '#59657D', fontSize: 13, lineHeight: 19 },
+  primaryButton: { marginTop: 14, borderRadius: 12, paddingVertical: 13, alignItems: 'center', backgroundColor: '#F3B33D' },
+  primaryButtonText: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  secondaryButton: { marginTop: 14, borderRadius: 12, paddingVertical: 13, alignItems: 'center', backgroundColor: '#0D1733' },
+  secondaryButtonText: { color: '#FFFFFF', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
 });
