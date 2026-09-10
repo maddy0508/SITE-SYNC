@@ -29,8 +29,11 @@ class MockDB {
 
     try {
       const stmt = this.db.prepare(sql);
+      const normalizedSql = sql.trim().replace(/^\(+|\)+$/g, '').toLowerCase();
+      const isPragmaQuery = /^pragma\s+[^=;]+(?:;)?$/.test(normalizedSql);
+      const isQuery = /^(select|with|values|explain)\b/.test(normalizedSql) || isPragmaQuery;
 
-      if (stmt.columns().length > 0) {
+      if (isQuery) {
         return {
           rows: stmt.all(...params),
           rowsAffected: 0,
