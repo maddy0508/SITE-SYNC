@@ -101,7 +101,7 @@ describe('M1.5 QR validation', () => {
   });
 
   test('blocks a worker from scanning another worker', async () => {
-    const workerContext = { ...context, personId: 'person_1', projectRole: 'WORKER' };
+    const workerContext: ProjectContextRecord = { ...context, personId: 'person_1', projectRole: 'WORKER' };
     const service = new QrValidationService({
       getMembership: async () => ({
         id: 'membership_2',
