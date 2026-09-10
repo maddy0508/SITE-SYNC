@@ -21,7 +21,7 @@ function createMockClient() {
         return { data: rows[0] ?? null, error: null };
       }),
       single: jest.fn(async () => {
-        const rows = [...state.values()].filter((row) => Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value));
+        const rows = builder.updatedRows ?? [...state.values()].filter((row) => Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value));
         return { data: rows[0] ?? null, error: null };
       }),
       insert: jest.fn((payload: any) => {
@@ -31,7 +31,9 @@ function createMockClient() {
         return builder;
       }),
       update: jest.fn((payload: any) => {
-        for (const row of state.values()) if (Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value)) Object.assign(row, payload);
+        const matchedRows = [...state.values()].filter((row) => Object.entries(builder.filters ?? {}).every(([key, value]) => row[key] === value));
+        builder.updatedRows = matchedRows;
+        for (const row of matchedRows) Object.assign(row, payload);
         return builder;
       }),
       then: (resolve: (value: any) => unknown) => builder.maybeSingle().then(resolve),
