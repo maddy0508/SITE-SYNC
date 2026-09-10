@@ -1,0 +1,38 @@
+name: M1.5 Android build
+
+on:
+  push:
+    branches:
+      - mckellarmaddy/mmm-33-m15-qr-attendance
+    paths:
+      - 'sitesync/**'
+      - '.github/workflows/m15-android-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+
+      - name: Install JavaScript dependencies
+        working-directory: sitesync
+        run: npm ci --ignore-scripts
+
+      - name: Assemble Android debug APK
+        working-directory: sitesync/android
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
