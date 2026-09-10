@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   install:
-    if: ${{ !startsWith(github.event.head_commit.message, 'chore(m1.5): install VisionCamera') }}
+    if: ${{ !startsWith(github.event.head_commit.message, 'chore(m1.5): install VisionCamera QR stack') }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -49,4 +49,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add sitesync/package.json sitesync/package-lock.json
           git commit -m 'chore(m1.5): install VisionCamera QR stack'
-          git push origin mckellarmaddy/mmm-33-qr-attendance
+          git push origin mckellarmaddy/mmm-33-m15-qr-attendance
