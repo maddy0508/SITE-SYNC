@@ -25,6 +25,7 @@ describe('worker QR payload', () => {
 
   it('allows the optional project hint to be absent', () => {
     const { projectId: _projectId, ...withoutProject } = valid;
+    void _projectId;
     const raw = encodeWorkerQrPayload(withoutProject);
     expect(parseWorkerQrPayload(raw)).toEqual(withoutProject);
   });
