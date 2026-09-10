@@ -11,10 +11,13 @@ export interface WorkerQrIdentityScreenProps {
 }
 
 export function WorkerQrIdentityScreen({ context, projectId, projectName }: WorkerQrIdentityScreenProps) {
-  const payload = useMemo(() => createWorkerQrPayload(context, projectId), [context, projectId]);
   const assignment = context.activeProjectAssignments.find((candidate) => candidate.projectId === projectId);
+  const payload = useMemo(
+    () => (assignment ? createWorkerQrPayload(context, projectId) : null),
+    [assignment, context, projectId],
+  );
 
-  if (!assignment) {
+  if (!assignment || !payload) {
     return (
       <View style={styles.errorScreen} testID="worker-qr-error">
         <Text style={styles.errorTitle}>QR ID unavailable</Text>
