@@ -65,23 +65,25 @@ export class DeviceRegistrationService {
 
   async get(authenticatedUserId: string): Promise<DeviceInstallation | null> {
     if (!authenticatedUserId) throw new DeviceRegistrationServiceError('INVALID_INPUT', 'Authenticated user id is required');
-    const result = await this.client.from('device_installations').select('id, user_id, installation_key, device_name, app_version, os_version, status, created_at, last_seen_at, revoked_at').eq('user_id', authenticatedUserId).maybeSingle() as unknown as QueryResult<Row>;
+    const result = await this.client.from('device_installations').select('id, user_id, installation_key, device_name, app_version, os_version, status, created_at, last_seen_at, revoked_at').eq('user_id', authenticatedUserId).eq('status', 'ACTIVE').maybeSingle() as unknown as QueryResult<Row>;
     if (result.error) throw new DeviceRegistrationServiceError('SUPABASE_FAILED', result.error.message);
     return result.data ? this.mapInstallation(result.data, authenticatedUserId) : null;
   }
 
   async revoke(authenticatedUserId: string, expectedRevision: number, now: string): Promise<DeviceInstallation> {
     if (!authenticatedUserId || !now || !Number.isInteger(expectedRevision) || expectedRevision < 1) throw new DeviceRegistrationServiceError('INVALID_INPUT', 'Authenticated user id, revision, and timestamp are required');
+    const parsed = new Date(now);
+    if (Number.isNaN(parsed.getTime()) || parsed.toISOString() !== now) throw new DeviceRegistrationServiceError('INVALID_INPUT', 'Timestamp must be a normalized UTC ISO-8601 value');
     const localSession = await this.local.getLocalDeviceSession(authenticatedUserId);
     if (!localSession) throw new DeviceRegistrationServiceError('DEVICE_NOT_FOUND', 'No local device session exists for authenticated user');
     if (localSession.revision !== expectedRevision) throw new DeviceRegistrationServiceError('REVISION_MISMATCH', `Revision mismatch: expected ${expectedRevision}, got ${localSession.revision}`);
     if (localSession.status === 'REVOKED') throw new DeviceRegistrationServiceError('INVALID_LIFECYCLE', 'A revoked device cannot be revoked again');
 
-    const result = await this.client.from('device_installations').update({ status: 'REVOKED', revoked_at: now, last_seen_at: now }).eq('id', localSession.deviceInstallationId).eq('user_id', authenticatedUserId).select('id, user_id, installation_key, device_name, app_version, os_version, status, created_at, last_seen_at, revoked_at').single() as unknown as QueryResult<Row>;
+    const result = await this.client.from('device_installations').update({ status: 'REVOKED', revoked_at: now, last_seen_at: now }).eq('id', localSession.deviceInstallationId).eq('user_id', authenticatedUserId).eq('status', 'ACTIVE').select('id, user_id, installation_key, device_name, app_version, os_version, status, created_at, last_seen_at, revoked_at').single() as unknown as QueryResult<Row>;
     if (result.error) throw new DeviceRegistrationServiceError('SUPABASE_FAILED', result.error.message);
-    if (!result.data) throw new DeviceRegistrationServiceError('DEVICE_NOT_FOUND', 'Authoritative device installation could not be resolved');
+    if (!result.data) throw new DeviceRegistrationServiceError('DEVICE_NOT_FOUND', 'Authoritative active device installation could not be resolved');
     const installation = this.mapInstallation(result.data, authenticatedUserId);
-    if (installation.status !== 'REVOKED') throw new DeviceRegistrationServiceError('INVALID_LIFECYCLE', 'Device revocation did not produce REVOKED state');
+    if (installation.status !== 'REVOKED' || installation.revokedAt !== now) throw new DeviceRegistrationServiceError('INVALID_LIFECYCLE', 'Device revocation did not produce the expected terminal state');
     await this.local.updateLocalDeviceSession(authenticatedUserId, expectedRevision, { status: 'REVOKED', lastVerifiedAt: now, updatedAt: now });
     return installation;
   }
@@ -102,6 +104,8 @@ export class DeviceRegistrationService {
     if (userId !== authenticatedUserId) throw new DeviceRegistrationServiceError('CROSS_USER_ACCESS', 'Device installation does not belong to authenticated user');
     const status = row.status as DeviceInstallation['status'];
     if (status !== 'ACTIVE' && status !== 'REVOKED') throw new DeviceRegistrationServiceError('INVALID_LIFECYCLE', `Unsupported device status: ${String(row.status)}`);
+    if (status === 'ACTIVE' && row.revoked_at != null) throw new DeviceRegistrationServiceError('INVALID_LIFECYCLE', 'ACTIVE device installation cannot have revoked_at');
+    if (status === 'REVOKED' && row.revoked_at == null) throw new DeviceRegistrationServiceError('INVALID_LIFECYCLE', 'REVOKED device installation must have revoked_at');
     return { id: String(row.id), userId, installationKey: String(row.installation_key), deviceName: row.device_name == null ? null : String(row.device_name), appVersion: row.app_version == null ? null : String(row.app_version), osVersion: row.os_version == null ? null : String(row.os_version), status, createdAt: this.normalizeTimestamp(row.created_at, 'created_at'), lastSeenAt: this.normalizeTimestamp(row.last_seen_at, 'last_seen_at'), revokedAt: row.revoked_at == null ? null : this.normalizeTimestamp(row.revoked_at, 'revoked_at') };
   }
 

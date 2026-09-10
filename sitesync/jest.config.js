@@ -28,5 +28,9 @@ module.exports = {
   moduleNameMapper: {
     '^@op-engineering/op-sqlite$':
       '<rootDir>/__mocks__/@op-engineering/op-sqlite.js',
+    '^react-native-vision-camera$':
+      '<rootDir>/__mocks__/react-native-vision-camera.js',
+    '^react-native-vision-camera-barcode-scanner$':
+      '<rootDir>/__mocks__/react-native-vision-camera-barcode-scanner.js',
   },
 };
