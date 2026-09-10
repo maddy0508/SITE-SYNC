@@ -5,6 +5,8 @@ import { QrValidationService } from '../src/qr/qrValidation';
 import type { ProjectContextRecord, ProjectRosterRecord } from '../src/domain/localPersistence';
 import type { WorkerQrPayload } from '../src/qr/qrPayload';
 import { QrCameraFrameAdapter } from '../src/qr/qrCameraFrameAdapter';
+import { createWorkerQrPayload, WorkerQrIdentityError } from '../src/qr/workerQrIdentity';
+import type { ApplicationContext } from '../src/identity/projectContext';
 
 describe('M1.5 QR payload', () => {
   const payload: WorkerQrPayload = {
@@ -27,6 +29,31 @@ describe('M1.5 QR payload', () => {
     expect(() => parseWorkerQrPayload('SITE-SYNC:1|org=org_1|company=company_1|person=person_1|membership=membership_1|membership=membership_2')).toThrow('Duplicate QR field');
     expect(() => parseWorkerQrPayload('SITE-SYNC:1|org=org_1|company=company_1|person=person_1')).toThrow('Missing required QR field membership');
     expect(() => parseWorkerQrPayload('SITE-SYNC:1|org=org_1|company=company_1|person=person_1|membership=../../etc')).toThrow('Invalid membership value');
+  });
+
+  test('derives the QR from trusted application context rather than caller-supplied identifiers', () => {
+    const context = {
+      userId: 'user_1',
+      profile: { userId: 'user_1', organisationId: 'org_1', personId: 'person_1' },
+      person: { id: 'person_1', organisationId: 'org_1', displayName: 'WORKER ONE' },
+      organisation: { id: 'org_1', name: 'ORG ONE' },
+      memberships: [],
+      activeProjectAssignments: [{
+        id: 'assignment_1',
+        organisationId: 'org_1',
+        projectId: 'project_1',
+        companyId: 'company_1',
+        companyMembershipId: 'membership_1',
+        personId: 'person_1',
+        projectRole: 'WORKER',
+        status: 'ACTIVE',
+      }],
+      hasProjectAccess: true,
+      device: null,
+    } satisfies ApplicationContext;
+
+    expect(createWorkerQrPayload(context, 'project_1')).toEqual(payload);
+    expect(() => createWorkerQrPayload(context, 'project_2')).toThrow(WorkerQrIdentityError);
   });
 });
 
