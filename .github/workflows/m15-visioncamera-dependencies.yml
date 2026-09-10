@@ -1,5 +1,6 @@
 name: M1.5 VisionCamera dependencies
 
+# M1.5 dependency gate: keep native camera packages and lockfile reproducible.
 on:
   push:
     branches:
@@ -8,6 +9,7 @@ on:
       - '.github/workflows/m15-visioncamera-dependencies.yml'
       - 'sitesync/package.json'
       - 'sitesync/package-lock.json'
+  workflow_dispatch:
 
 permissions:
   contents: write
