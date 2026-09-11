@@ -2,7 +2,11 @@ import type { CommandLedgerRecord } from '../domain/localPersistence';
 import { STALE_PROCESSING_THRESHOLD_MS, canTransitionCommand } from '../domain/localPersistence';
 import { getDb, withTransaction } from '../database/localPersistence';
 
-function mapCommand(row: Record<string, unknown>): CommandLedgerRecord {
+export interface ClaimedSyncCommand extends CommandLedgerRecord {
+  commandPayloadJson: string;
+}
+
+function mapCommand(row: Record<string, unknown>): ClaimedSyncCommand {
   return {
     commandId: String(row.commandId),
     projectId: String(row.projectId),
@@ -24,6 +28,7 @@ function mapCommand(row: Record<string, unknown>): CommandLedgerRecord {
     failureDiagnostics: row.failureDiagnostics == null ? null : String(row.failureDiagnostics),
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt),
+    commandPayloadJson: String(row.commandPayloadJson ?? '{}'),
   };
 }
 
@@ -47,7 +52,7 @@ export class SyncCommandRepository {
     return result.rowsAffected;
   }
 
-  async claimNextEligible(now: string): Promise<CommandLedgerRecord | null> {
+  async claimNextEligible(now: string): Promise<ClaimedSyncCommand | null> {
     return withTransaction(async (tx) => {
       const result = await tx.executeSql(
         `${SELECT} WHERE (status='PENDING' OR (status='RETRYABLE_FAILURE' AND (next_retry_at IS NULL OR next_retry_at <= ?)))
@@ -55,6 +60,7 @@ export class SyncCommandRepository {
             SELECT 1 FROM command_ledger earlier
             WHERE earlier.project_id = command_ledger.project_id
               AND earlier.person_id = command_ledger.person_id
+              AND substr(earlier.command_payload_json, 1, 20) = substr(command_ledger.command_payload_json, 1, 20)
               AND earlier.status IN ('PENDING','PROCESSING','RETRYABLE_FAILURE')
               AND (earlier.created_at < command_ledger.created_at
                    OR (earlier.created_at = command_ledger.created_at AND earlier.command_id < command_ledger.command_id))
@@ -126,7 +132,7 @@ export class SyncCommandRepository {
       `INSERT INTO conflict (conflict_id, command_id, entity_type, entity_id, local_revision, server_revision,
         local_payload, server_payload, status, reason_code, reason, resolved_at, resolved_by, resolution_strategy, created_at, updated_at)
        SELECT ?, command_id, 'ATTENDANCE_STATE', json_object('projectId', project_id, 'personId', person_id, 'workDateUtc', substr(created_at,1,10)),
-        base_revision + 1, ?, command_payload_json, ?, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
+        base_revision + 1, ?, command_payload_json, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
        FROM command_ledger WHERE command_id=?`,
       [conflictId, serverRevision, serverPayload, reasonCode, now, now, commandId],
     );
@@ -135,8 +141,8 @@ export class SyncCommandRepository {
       [serverRevision, now, commandId],
     );
     await getDb().execute(
-      `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=?`,
-      [serverRevision, now, command.projectId, command.personId],
+      `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=? AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)',
+      [serverRevision, now, command.projectId, command.personId, commandId],
     );
   }
 
