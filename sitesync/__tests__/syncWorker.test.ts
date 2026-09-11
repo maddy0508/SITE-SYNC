@@ -24,17 +24,20 @@ function repo(): RepoMock {
   };
 }
 
+const deviceContext = { getDeviceInstallationId: jest.fn().mockResolvedValue('device-1') };
+
 describe('sync worker', () => {
   it('serializes concurrent runs and submits a claimed command once', async () => {
     const repository = repo();
     let release!: () => void;
     const transport: SyncTransport = { submit: jest.fn(() => new Promise(resolve => { release = () => resolve({ kind: 'ACCEPTED', serverRevision: 1, result: { ok: true } }); })) };
-    const worker = new SyncWorker(transport, repository);
+    const worker = new SyncWorker(transport, repository, deviceContext);
     const first = worker.runOnce('2026-09-12T00:00:00.000Z');
     const second = worker.runOnce('2026-09-12T00:00:00.000Z');
     await Promise.resolve();
     await Promise.resolve();
     expect(transport.submit).toHaveBeenCalledTimes(1);
+    expect(transport.submit).toHaveBeenCalledWith(expect.objectContaining({ deviceInstallationId: 'device-1' }));
     release();
     await Promise.all([first, second]);
     expect(repository.markSucceeded).toHaveBeenCalledTimes(1);
@@ -43,7 +46,7 @@ describe('sync worker', () => {
   it('uses the persisted payload and marks a duplicate as successful', async () => {
     const repository = repo();
     const transport: SyncTransport = { submit: jest.fn().mockResolvedValue({ kind: 'DUPLICATE_ACCEPTED', serverRevision: 1, result: { duplicate: true } }) };
-    const worker = new SyncWorker(transport, repository);
+    const worker = new SyncWorker(transport, repository, deviceContext);
     await worker.runOnce('2026-09-12T00:00:00.000Z');
     expect(transport.submit).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ commandId: 'cmd-1' }) }));
     expect(repository.markSucceeded).toHaveBeenCalledWith('cmd-1', expect.any(String), 1, { duplicate: true });
@@ -52,7 +55,7 @@ describe('sync worker', () => {
   it('persists retryable failures until attempts are exhausted', async () => {
     const repository = repo();
     const transport: SyncTransport = { submit: jest.fn().mockResolvedValue({ kind: 'SERVER_ERROR', code: '503', message: 'unavailable', retryable: true }) };
-    const worker = new SyncWorker(transport, repository);
+    const worker = new SyncWorker(transport, repository, deviceContext);
     await worker.runOnce('2026-09-12T00:00:00.000Z');
     expect(repository.markRetryableFailure).toHaveBeenCalledWith('cmd-1', expect.any(String), expect.any(String), '503', 'unavailable');
   });
@@ -60,9 +63,18 @@ describe('sync worker', () => {
   it('records revision conflicts without marking the attendance state verified', async () => {
     const repository = repo();
     const transport: SyncTransport = { submit: jest.fn().mockResolvedValue({ kind: 'REVISION_CONFLICT', serverRevision: 4, serverPayload: '{}', reasonCode: 'REVISION_CONFLICT' }) };
-    const worker = new SyncWorker(transport, repository);
+    const worker = new SyncWorker(transport, repository, deviceContext);
     await worker.runOnce('2026-09-12T00:00:00.000Z');
     expect(repository.markConflict).toHaveBeenCalledWith('cmd-1', expect.any(String), 4, '{}', 'REVISION_CONFLICT');
     expect(repository.markSucceeded).not.toHaveBeenCalled();
+  });
+
+  it('does not submit when no local device installation is available', async () => {
+    const repository = repo();
+    const transport: SyncTransport = { submit: jest.fn() };
+    const worker = new SyncWorker(transport, repository, { getDeviceInstallationId: jest.fn().mockResolvedValue(null) });
+    await worker.runOnce('2026-09-12T00:00:00.000Z');
+    expect(transport.submit).not.toHaveBeenCalled();
+    expect(repository.markRetryableFailure).toHaveBeenCalledWith('cmd-1', expect.any(String), expect.any(String), 'DEVICE_CONTEXT', expect.any(String));
   });
 });
