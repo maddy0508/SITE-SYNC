@@ -12,10 +12,13 @@ const PROJECT = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const PROJECT_OTHER = 'ffffffff-ffff-4fff-8fff-ffffffffffff';
 const PERSON_SELF = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const PERSON_OTHER = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const PERSON_UNASSIGNED = '99999999-9999-4999-8999-999999999999';
 const COMPANY_A = 'company-1';
 const COMPANY_B = 'company-2';
 const MEMBERSHIP_SELF = 'membership-1';
 const MEMBERSHIP_OTHER = 'membership-2';
+const MEMBERSHIP_UNASSIGNED = 'membership-3';
+const MEMBERSHIP_INACTIVE = 'membership-inactive';
 
 const context: ProjectContextRecord = {
   personId: PERSON_SELF,
@@ -62,6 +65,22 @@ const otherMembership: TrustedMembershipRecord = {
   status: 'ACTIVE',
 };
 
+const unassignedMembership: TrustedMembershipRecord = {
+  id: MEMBERSHIP_UNASSIGNED,
+  organisationId: ORG_A,
+  companyId: COMPANY_A,
+  personId: PERSON_UNASSIGNED,
+  status: 'ACTIVE',
+};
+
+const inactiveMembership: TrustedMembershipRecord = {
+  id: MEMBERSHIP_INACTIVE,
+  organisationId: ORG_A,
+  companyId: COMPANY_A,
+  personId: PERSON_SELF,
+  status: 'INACTIVE',
+};
+
 const qaResolver: QrRosterResolver = {
   async getRoster(projectId, personId) {
     if (projectId !== PROJECT) return null;
@@ -72,6 +91,8 @@ const qaResolver: QrRosterResolver = {
   async getMembership(membershipId) {
     if (membershipId === MEMBERSHIP_SELF) return selfMembership;
     if (membershipId === MEMBERSHIP_OTHER) return otherMembership;
+    if (membershipId === MEMBERSHIP_UNASSIGNED) return unassignedMembership;
+    if (membershipId === MEMBERSHIP_INACTIVE) return inactiveMembership;
     return null;
   },
 };
@@ -85,12 +106,39 @@ const validSelf = encodeWorkerQrPayload({
   projectId: PROJECT,
 });
 
-const validOther = encodeWorkerQrPayload({
+const validOtherCompany = encodeWorkerQrPayload({
   version: 1,
   organisationId: ORG_A,
   companyId: COMPANY_B,
   personId: PERSON_OTHER,
   membershipId: MEMBERSHIP_OTHER,
+  projectId: PROJECT,
+});
+
+const validOtherPersonSameCompany = encodeWorkerQrPayload({
+  version: 1,
+  organisationId: ORG_A,
+  companyId: COMPANY_A,
+  personId: PERSON_OTHER,
+  membershipId: MEMBERSHIP_SELF,
+  projectId: PROJECT,
+});
+
+const unassignedWorker = encodeWorkerQrPayload({
+  version: 1,
+  organisationId: ORG_A,
+  companyId: COMPANY_A,
+  personId: PERSON_UNASSIGNED,
+  membershipId: MEMBERSHIP_UNASSIGNED,
+  projectId: PROJECT,
+});
+
+const inactiveWorker = encodeWorkerQrPayload({
+  version: 1,
+  organisationId: ORG_A,
+  companyId: COMPANY_A,
+  personId: PERSON_SELF,
+  membershipId: MEMBERSHIP_INACTIVE,
   projectId: PROJECT,
 });
 
@@ -152,11 +200,14 @@ export async function runM15QaSuite(): Promise<M15QaResult[]> {
   await addValidation('Valid self QR', validSelf, 'VALID');
   await addValidation('Malformed payload', malformed, 'PARSE:MISSING_FIELD');
   await addValidation('Wrong organisation', wrongOrganisation, 'BLOCKED:ORG_MISMATCH');
+  await addValidation('Wrong company', validOtherCompany, 'BLOCKED:COMPANY_MISMATCH');
+  await addValidation('Unassigned worker', unassignedWorker, 'BLOCKED:PERSON_UNASSIGNED');
+  await addValidation('Inactive membership', inactiveWorker, 'BLOCKED:MEMBERSHIP_INVALID');
   await addValidation('Wrong project', wrongProject, 'BLOCKED:PROJECT_UNASSIGNED');
+  await addValidation('Unauthorised worker scan', validOtherPersonSameCompany, 'BLOCKED:ACTOR_NOT_PERMITTED');
   await addValidation('Unknown membership online', unknownMembership, 'BLOCKED:MEMBERSHIP_INVALID');
   await addValidation('Unknown membership offline', unknownMembership, 'BLOCKED:ROSTER_UNVERIFIABLE', false);
   await addValidation('Valid self QR offline', validSelf, 'PROVISIONAL', false);
-  await addValidation('Other company / other worker', validOther, 'BLOCKED:COMPANY_MISMATCH');
   await addValidation('Unsupported QR version', unsupportedVersion, 'PARSE:UNSUPPORTED_VERSION');
 
   const duplicateClock = { value: 1000 };
@@ -195,7 +246,7 @@ export function M15QaScreen({ onBack }: { onBack: () => void }) {
         <Text style={styles.subtitle}>Self-contained validation tests — no second phone, printed QR or external display required.</Text>
         <View style={styles.note}>
           <Text style={styles.noteTitle}>WHAT THIS TESTS</Text>
-          <Text style={styles.noteBody}>The physical camera test already proves the native camera + QR detection path. This suite exercises the same parser, validation service and duplicate-scan controller with controlled fixtures so rejection and offline cases can be tested on this device.</Text>
+          <Text style={styles.noteBody}>The physical camera test proves the native camera + QR detection path. This suite exercises the same parser, validation service and duplicate-scan controller with controlled fixtures so rejection and offline cases can be tested on this device.</Text>
         </View>
         <Pressable style={styles.button} onPress={run} disabled={running}>
           <Text style={styles.buttonText}>{running ? 'RUNNING…' : 'RUN ALL M1.5 TESTS'}</Text>
