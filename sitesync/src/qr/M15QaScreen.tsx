@@ -16,7 +16,8 @@ const PERSON_UNASSIGNED = '99999999-9999-4999-8999-999999999999';
 const COMPANY_A = 'company-1';
 const COMPANY_B = 'company-2';
 const MEMBERSHIP_SELF = 'membership-1';
-const MEMBERSHIP_OTHER = 'membership-2';
+const MEMBERSHIP_OTHER_COMPANY = 'membership-2';
+const MEMBERSHIP_OTHER_SAME_COMPANY = 'membership-4';
 const MEMBERSHIP_UNASSIGNED = 'membership-3';
 const MEMBERSHIP_INACTIVE = 'membership-inactive';
 
@@ -57,10 +58,18 @@ const selfMembership: TrustedMembershipRecord = {
   status: 'ACTIVE',
 };
 
-const otherMembership: TrustedMembershipRecord = {
-  id: MEMBERSHIP_OTHER,
+const otherCompanyMembership: TrustedMembershipRecord = {
+  id: MEMBERSHIP_OTHER_COMPANY,
   organisationId: ORG_A,
   companyId: COMPANY_B,
+  personId: PERSON_OTHER,
+  status: 'ACTIVE',
+};
+
+const otherSameCompanyMembership: TrustedMembershipRecord = {
+  id: MEMBERSHIP_OTHER_SAME_COMPANY,
+  organisationId: ORG_A,
+  companyId: COMPANY_A,
   personId: PERSON_OTHER,
   status: 'ACTIVE',
 };
@@ -90,7 +99,8 @@ const qaResolver: QrRosterResolver = {
   },
   async getMembership(membershipId) {
     if (membershipId === MEMBERSHIP_SELF) return selfMembership;
-    if (membershipId === MEMBERSHIP_OTHER) return otherMembership;
+    if (membershipId === MEMBERSHIP_OTHER_COMPANY) return otherCompanyMembership;
+    if (membershipId === MEMBERSHIP_OTHER_SAME_COMPANY) return otherSameCompanyMembership;
     if (membershipId === MEMBERSHIP_UNASSIGNED) return unassignedMembership;
     if (membershipId === MEMBERSHIP_INACTIVE) return inactiveMembership;
     return null;
@@ -111,7 +121,7 @@ const validOtherCompany = encodeWorkerQrPayload({
   organisationId: ORG_A,
   companyId: COMPANY_B,
   personId: PERSON_OTHER,
-  membershipId: MEMBERSHIP_OTHER,
+  membershipId: MEMBERSHIP_OTHER_COMPANY,
   projectId: PROJECT,
 });
 
@@ -120,7 +130,7 @@ const validOtherPersonSameCompany = encodeWorkerQrPayload({
   organisationId: ORG_A,
   companyId: COMPANY_A,
   personId: PERSON_OTHER,
-  membershipId: MEMBERSHIP_SELF,
+  membershipId: MEMBERSHIP_OTHER_SAME_COMPANY,
   projectId: PROJECT,
 });
 
