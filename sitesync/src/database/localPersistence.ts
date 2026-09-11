@@ -257,8 +257,8 @@ async function migrateSchemaV1ToV2(db: SQLiteDatabase): Promise<void> {
     if (!hasPayload) {
       await tx.executeSql("ALTER TABLE command_ledger ADD COLUMN command_payload_json TEXT NOT NULL DEFAULT '{}';");
     }
-    await tx.executeSql(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION};`);
   });
+  await db.execute(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION};`);
 }
 
 async function verifySchema(db: SQLiteDatabase): Promise<void> {
