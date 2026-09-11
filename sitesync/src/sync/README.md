@@ -10,4 +10,4 @@ Production transport is a later M1.7 slice after the local worker and reconcilia
 
 CI verification is required before merge.
 
-Temporary Jest diagnostics are enabled for this verification run only.
+Temporary Jest and compiler diagnostics are enabled for this verification run only.
