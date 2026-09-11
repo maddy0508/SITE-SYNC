@@ -60,7 +60,6 @@ export class SyncCommandRepository {
             SELECT 1 FROM command_ledger earlier
             WHERE earlier.project_id = command_ledger.project_id
               AND earlier.person_id = command_ledger.person_id
-              AND substr(earlier.command_payload_json, 1, 20) = substr(command_ledger.command_payload_json, 1, 20)
               AND earlier.status IN ('PENDING','PROCESSING','RETRYABLE_FAILURE')
               AND (earlier.created_at < command_ledger.created_at
                    OR (earlier.created_at = command_ledger.created_at AND earlier.command_id < command_ledger.command_id))
@@ -101,8 +100,7 @@ export class SyncCommandRepository {
 
   async markRetryableFailure(commandId: string, now: string, nextRetryAt: string, code: string, diagnostics: string): Promise<void> {
     await this.transition(commandId, 'RETRYABLE_FAILURE', {
-      serverRespondedAt: now, nextRetryAt, serverErrorCode: code, failureDiagnostics: diagnostics,
-      updatedAt: now,
+      serverRespondedAt: now, nextRetryAt, serverErrorCode: code, failureDiagnostics: diagnostics, updatedAt: now,
     });
   }
 
