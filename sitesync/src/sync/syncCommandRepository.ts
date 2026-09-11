@@ -6,6 +6,8 @@ export interface ClaimedSyncCommand extends CommandLedgerRecord {
   commandPayloadJson: string;
 }
 
+type SqlFieldValue = string | number | null;
+
 function mapCommand(row: Record<string, unknown>): ClaimedSyncCommand {
   return {
     commandId: String(row.commandId),
@@ -148,7 +150,7 @@ export class SyncCommandRepository {
     );
   }
 
-  private async transition(commandId: string, to: CommandLedgerRecord['status'], fields: Record<string, unknown>): Promise<void> {
+  private async transition(commandId: string, to: CommandLedgerRecord['status'], fields: Record<string, SqlFieldValue>): Promise<void> {
     const result = await getDb().execute(`${SELECT} WHERE command_id=?`, [commandId]);
     if (result.rows.length === 0) throw new Error(`Unknown command ${commandId}`);
     const current = mapCommand(result.rows.item(0) as unknown as Record<string, unknown>);
