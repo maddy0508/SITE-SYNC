@@ -3,6 +3,7 @@ import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'reac
 import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
 import { M15QaScreen } from './src/qr/M15QaScreen';
+import { M16QaScreen } from './src/attendance/M16QaScreen';
 import { QrScannerScreen } from './src/qr/QrScannerScreen';
 import { WorkerQrIdentityScreen } from './src/qr/WorkerQrIdentityScreen';
 import type { QrRosterResolver, TrustedMembershipRecord } from './src/qr/qrValidation';
@@ -80,7 +81,7 @@ const qaResolver: QrRosterResolver = {
   },
 };
 
-type Screen = 'home' | 'workerQr' | 'scanner' | 'qa';
+type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -123,33 +124,45 @@ export default function App() {
     );
   }
 
+  if (screen === 'm16qa') {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
+        <M16QaScreen onBack={() => setScreen('home')} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
       <View style={styles.home}>
         <Text style={styles.eyebrow}>SITE-SYNC</Text>
-        <Text style={styles.title}>M1.5 QR TEST</Text>
+        <Text style={styles.title}>M1.6 ATTENDANCE TEST</Text>
         <Text style={styles.subtitle}>Standalone device verification</Text>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>QR ATTENDANCE</Text>
-          <Text style={styles.cardBody}>This test build exposes the M1.5 worker QR, camera scanner and self-contained validation suite directly so the native and business-rule flows can be verified without requiring a second device.</Text>
+          <Text style={styles.cardTitle}>OFFLINE ATTENDANCE</Text>
+          <Text style={styles.cardBody}>M1.6 exercises local check-in/check-out, durable command history, restart persistence and transactional rollback without touching production Supabase.</Text>
         </View>
 
-        <Pressable style={styles.primary} onPress={() => setScreen('scanner')}>
-          <Text style={styles.primaryText}>SCAN WORKER QR</Text>
+        <Pressable style={styles.primary} onPress={() => setScreen('m16qa')}>
+          <Text style={styles.primaryText}>RUN M1.6 DEVICE SUITE</Text>
         </Pressable>
-        <Pressable style={styles.secondary} onPress={() => setScreen('workerQr')}>
-          <Text style={styles.secondaryText}>SHOW WORKER QR</Text>
+        <Pressable style={styles.secondary} onPress={() => setScreen('qa')}>
+          <Text style={styles.secondaryText}>RUN M1.5 QR SUITE</Text>
         </Pressable>
-        <Pressable style={styles.qaButton} onPress={() => setScreen('qa')}>
-          <Text style={styles.qaButtonText}>RUN M1.5 QA SUITE</Text>
+        <Pressable style={styles.secondary} onPress={() => setScreen('scanner')}>
+          <Text style={styles.secondaryText}>SCAN WORKER QR</Text>
+        </Pressable>
+        <Pressable style={styles.qaButton} onPress={() => setScreen('workerQr')}>
+          <Text style={styles.qaButtonText}>SHOW WORKER QR</Text>
         </Pressable>
 
         <View style={styles.footer}>
           <Text style={styles.footerTitle}>TEST CONTEXT</Text>
-          <Text style={styles.footerText}>Organisation A · Test Project · Worker identity fixture</Text>
-          <Text style={styles.footerText}>No attendance mutation is performed by M1.5.</Text>
+          <Text style={styles.footerText}>M1.6 isolated local SQLite fixture</Text>
+          <Text style={styles.footerText}>No production Supabase mutation.</Text>
         </View>
       </View>
     </SafeAreaView>
