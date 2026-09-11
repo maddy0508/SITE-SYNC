@@ -5,7 +5,6 @@ import type { ProjectAssignment } from '../identity/identityService';
 import { AttendanceService } from './attendanceService';
 import { closeDatabase, getDb, initializeDatabase } from '../database/localPersistence';
 
-const TEST_DATABASE = 'm16-device-qa.db';
 const ORG = 'org-m16';
 const COMPANY = 'company-m16';
 const PROJECT = 'project-m16';
@@ -37,8 +36,11 @@ const context: ApplicationContext = {
 type Result = { name: string; passed: boolean; detail: string };
 
 async function runM16DeviceSuite(): Promise<Result[]> {
+  // Each run gets a fresh isolated database. This prevents a previous QA run's
+  // checked-out state from contaminating the fixed fixture timestamps below.
+  const testDatabase = `m16-device-qa-${Date.now().toString(36)}.db`;
   await closeDatabase();
-  await initializeDatabase(TEST_DATABASE);
+  await initializeDatabase(testDatabase);
 
   const results: Result[] = [];
   const checkIn = await AttendanceService.checkIn({
@@ -67,7 +69,7 @@ async function runM16DeviceSuite(): Promise<Result[]> {
   });
 
   await closeDatabase();
-  await initializeDatabase(TEST_DATABASE);
+  await initializeDatabase(testDatabase);
   const restartState = await getDb().execute(
     'SELECT state, current_revision FROM attendance_state WHERE project_id = ? AND person_id = ? AND work_date_utc = ?',
     [PROJECT, PERSON, '2026-09-11'],
