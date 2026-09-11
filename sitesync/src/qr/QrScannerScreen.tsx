@@ -19,10 +19,7 @@ export interface QrScannerScreenProps {
   onScanAccepted?: (result: QrValidationResult) => void;
 }
 
-type ScanMessage = {
-  title: string;
-  body: string;
-};
+type ScanMessage = { title: string; body: string };
 
 const BLOCK_REASON_MESSAGES: Record<string, string> = {
   ORG_MISMATCH: 'The QR code belongs to another organisation.',
@@ -36,22 +33,14 @@ const BLOCK_REASON_MESSAGES: Record<string, string> = {
 
 function getMessage(state: QrCameraState, error: Error | null, result: QrValidationResult | null): ScanMessage {
   switch (state) {
-    case 'permission_denied':
-      return { title: 'Camera access denied', body: 'Allow camera access in the app settings to scan worker QR codes.' };
-    case 'permission_blocked':
-      return { title: 'Camera access blocked', body: 'Camera access can no longer be requested here. Open system settings and allow SITE-SYNC to use the camera.' };
-    case 'processing':
-      return { title: 'Validating QR', body: 'Checking the code against the selected project and trusted membership data.' };
-    case 'valid':
-      return { title: 'Worker verified', body: result?.displayName ? `${result.displayName} is valid for this project.` : 'The worker QR code is valid.' };
-    case 'provisional':
-      return { title: 'Offline — provisional', body: result?.displayName ? `${result.displayName} was matched against trusted cached data. Do not treat this as server-verified.` : 'The QR code was matched against trusted cached data only.' };
-    case 'blocked':
-      return { title: 'Scan blocked', body: result?.reason ? BLOCK_REASON_MESSAGES[result.reason] ?? 'The QR code failed validation.' : error instanceof QrParseError ? `Invalid QR code: ${error.message}.` : error?.message || 'The QR code failed validation. No attendance action was created.' };
-    case 'error':
-      return { title: 'Scanner error', body: error?.message || 'The camera scanner encountered an error.' };
-    default:
-      return { title: 'Scan worker QR', body: 'Align the worker QR code inside the camera view.' };
+    case 'permission_denied': return { title: 'Camera access denied', body: 'Allow camera access in the app settings to scan worker QR codes.' };
+    case 'permission_blocked': return { title: 'Camera access blocked', body: 'Camera access can no longer be requested here. Open system settings and allow SITE-SYNC to use the camera.' };
+    case 'processing': return { title: 'Validating QR', body: 'Checking the code against the selected project and trusted membership data.' };
+    case 'valid': return { title: 'Worker verified', body: result?.displayName ? `${result.displayName} is valid for this project.` : 'The worker QR code is valid.' };
+    case 'provisional': return { title: 'Offline — provisional', body: result?.displayName ? `${result.displayName} was matched against trusted cached data. Do not treat this as server-verified.` : 'The QR code was matched against trusted cached data only.' };
+    case 'blocked': return { title: 'Scan blocked', body: result?.reason ? BLOCK_REASON_MESSAGES[result.reason] ?? 'The QR code failed validation.' : error instanceof QrParseError ? `Invalid QR code: ${error.message}.` : error?.message || 'The QR code failed validation. No attendance action was created.' };
+    case 'error': return { title: 'Scanner error', body: error?.message || 'The camera scanner encountered an error.' };
+    default: return { title: 'Scan worker QR', body: 'Align the worker QR code inside the camera view.' };
   }
 }
 
@@ -60,7 +49,7 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
   const device = useCameraDevice('back');
   const [cameraState, setCameraState] = useState<QrCameraState>('idle');
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
-  const [cameraInitialized, setCameraInitialized] = useState(false);
+  const [cameraStarted, setCameraStarted] = useState(false);
   const [scannerAttached, setScannerAttached] = useState(false);
   const [result, setResult] = useState<QrValidationResult | null>(null);
   const [scannerError, setScannerError] = useState<Error | null>(null);
@@ -75,7 +64,7 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
       setAppActive(active);
       if (!active) {
         setScannerAttached(false);
-        setCameraInitialized(false);
+        setCameraStarted(false);
       }
       setCameraState((current) => reduceQrCameraState(current, { type: active ? 'APPROACH_ACTIVE' : 'APPROACH_INACTIVE' }));
     });
@@ -87,34 +76,29 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
       setCameraState((current) => reduceQrCameraState(current, { type: 'PERMISSION_GRANTED' }));
       return;
     }
-    setCameraInitialized(false);
+    setCameraStarted(false);
     setScannerAttached(false);
     if (!canRequestPermission) {
       setCameraState('permission_blocked');
       return;
     }
     if (requestingPermission.current) return;
-
     requestingPermission.current = true;
     setCameraState('requesting_permission');
     requestPermission()
-      .then((granted) => {
-        setCameraState(granted ? 'ready' : 'permission_denied');
-      })
+      .then((granted) => setCameraState(granted ? 'ready' : 'permission_denied'))
       .catch((error: unknown) => {
         setScannerError(error instanceof Error ? error : new Error(String(error)));
         setCameraState('error');
       })
-      .finally(() => {
-        requestingPermission.current = false;
-      });
+      .finally(() => { requestingPermission.current = false; });
   }, [canRequestPermission, hasPermission, requestPermission]);
 
   const reset = useCallback(() => {
     controller.reset();
     setResult(null);
     setScannerError(null);
-    setCameraInitialized(false);
+    setCameraStarted(false);
     setScannerAttached(false);
     setCameraState(hasPermission ? 'ready' : canRequestPermission ? 'idle' : 'permission_blocked');
   }, [canRequestPermission, controller, hasPermission]);
@@ -122,10 +106,8 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
   const handleBarcodeScanned = useCallback(async (barcodes: Array<{ rawValue?: string; displayValue?: string }>) => {
     if (cameraState !== 'ready' || !barcodes.length) return;
     if (!adapter.handle(barcodes[0])) return;
-
     setCameraState((current) => reduceQrCameraState(current, { type: 'QR_DETECTED' }));
     setScannerError(null);
-
     try {
       const rawValue = barcodes[0].rawValue ?? barcodes[0].displayValue;
       const payload = parseWorkerQrPayload(rawValue ?? '');
@@ -143,12 +125,12 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
   const handleCameraError = useCallback((error: Error) => {
     setScannerError(error);
     setScannerAttached(false);
-    setCameraInitialized(false);
+    setCameraStarted(false);
     setCameraState('error');
   }, []);
 
-  const handleCameraInitialized = useCallback(() => {
-    setCameraInitialized(true);
+  const handleCameraStarted = useCallback(() => {
+    setCameraStarted(true);
     setScannerAttached(true);
   }, []);
 
@@ -165,15 +147,9 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
   return (
     <View style={styles.screen} testID="qr-scanner-screen">
       <View style={styles.topBar}>
-        <View>
-          <Text style={styles.eyebrow}>SITE-SYNC</Text>
-          <Text style={styles.heading}>SCAN WORKER</Text>
-        </View>
-        <View style={[styles.networkBadge, online ? styles.online : styles.offline]}>
-          <Text style={styles.networkText}>{online ? 'ONLINE' : 'OFFLINE'}</Text>
-        </View>
+        <View><Text style={styles.eyebrow}>SITE-SYNC</Text><Text style={styles.heading}>SCAN WORKER</Text></View>
+        <View style={[styles.networkBadge, online ? styles.online : styles.offline]}><Text style={styles.networkText}>{online ? 'ONLINE' : 'OFFLINE'}</Text></View>
       </View>
-
       <View style={styles.scannerFrame}>
         {hasPermission && device ? (
           <Camera
@@ -181,55 +157,25 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
             device={device}
             isActive={isCameraActive}
             outputs={scannerAttached ? [barcodeOutput] : []}
-            onInitialized={handleCameraInitialized}
+            onStarted={handleCameraStarted}
             onError={handleCameraError}
           />
         ) : (
-          <View style={styles.cameraPlaceholder}>
-            <Text style={styles.placeholderTitle}>Camera access required</Text>
-            <Text style={styles.placeholderBody}>SITE-SYNC needs the camera to read worker QR codes.</Text>
-          </View>
+          <View style={styles.cameraPlaceholder}><Text style={styles.placeholderTitle}>Camera access required</Text><Text style={styles.placeholderBody}>SITE-SYNC needs the camera to read worker QR codes.</Text></View>
         )}
-
-        {hasPermission && cameraInitialized && scannerAttached && isCameraActive ? (
+        {hasPermission && cameraStarted && scannerAttached && isCameraActive ? (
           <View pointerEvents="none" style={styles.scanTarget}>
-            <View style={[styles.corner, styles.cornerTopLeft]} />
-            <View style={[styles.corner, styles.cornerTopRight]} />
-            <View style={[styles.corner, styles.cornerBottomLeft]} />
-            <View style={[styles.corner, styles.cornerBottomRight]} />
+            <View style={[styles.corner, styles.cornerTopLeft]} /><View style={[styles.corner, styles.cornerTopRight]} /><View style={[styles.corner, styles.cornerBottomLeft]} /><View style={[styles.corner, styles.cornerBottomRight]} />
             <Text style={styles.scanHint}>ALIGN QR CODE</Text>
           </View>
         ) : null}
-
-        {hasPermission && !cameraInitialized && isCameraActive ? (
-          <View pointerEvents="none" style={styles.startingOverlay}>
-            <Text style={styles.processingTitle}>STARTING CAMERA</Text>
-          </View>
-        ) : null}
-
-        {cameraState === 'processing' ? (
-          <View style={styles.processingOverlay}>
-            <Text style={styles.processingTitle}>VALIDATING</Text>
-            <Text style={styles.processingBody}>Checking trusted project context…</Text>
-          </View>
-        ) : null}
+        {hasPermission && !cameraStarted && isCameraActive ? <View pointerEvents="none" style={styles.startingOverlay}><Text style={styles.processingTitle}>STARTING CAMERA</Text></View> : null}
+        {cameraState === 'processing' ? <View style={styles.processingOverlay}><Text style={styles.processingTitle}>VALIDATING</Text><Text style={styles.processingBody}>Checking trusted project context…</Text></View> : null}
       </View>
-
       <View style={styles.statusPanel}>
-        <Text style={styles.statusTitle}>{message.title}</Text>
-        <Text style={styles.statusBody}>{message.body}</Text>
-
-        {cameraState === 'permission_blocked' || cameraState === 'permission_denied' ? (
-          <Pressable style={styles.primaryButton} onPress={() => Linking.openSettings()}>
-            <Text style={styles.primaryButtonText}>OPEN SETTINGS</Text>
-          </Pressable>
-        ) : null}
-
-        {cameraState === 'valid' || cameraState === 'provisional' || cameraState === 'blocked' || cameraState === 'error' ? (
-          <Pressable style={styles.secondaryButton} onPress={reset}>
-            <Text style={styles.secondaryButtonText}>SCAN ANOTHER</Text>
-          </Pressable>
-        ) : null}
+        <Text style={styles.statusTitle}>{message.title}</Text><Text style={styles.statusBody}>{message.body}</Text>
+        {cameraState === 'permission_blocked' || cameraState === 'permission_denied' ? <Pressable style={styles.primaryButton} onPress={() => Linking.openSettings()}><Text style={styles.primaryButtonText}>OPEN SETTINGS</Text></Pressable> : null}
+        {cameraState === 'valid' || cameraState === 'provisional' || cameraState === 'blocked' || cameraState === 'error' ? <Pressable style={styles.secondaryButton} onPress={reset}><Text style={styles.secondaryButtonText}>SCAN ANOTHER</Text></Pressable> : null}
       </View>
     </View>
   );
