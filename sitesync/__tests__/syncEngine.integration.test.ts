@@ -25,7 +25,7 @@ describe('M1.7 controlled sync integration', () => {
   it('synchronizes a pending command and preserves command history', async () => {
     await seedPendingCommand();
     const transport: SyncTransport = { submit: async request => ({ kind: 'ACCEPTED', serverRevision: request.command.baseRevision + 1, result: { accepted: true } }) };
-    const worker = new SyncWorker(undefined, transport);
+    const worker = new SyncWorker(transport);
     const result = await worker.runOnce(NOW);
     expect(result.status).toBe('SUCCEEDED');
     const row = await getDb().execute(`SELECT status, attempt_count as attemptCount, synced_at as syncedAt FROM command_ledger WHERE command_id='cmd-1'`);
@@ -36,7 +36,7 @@ describe('M1.7 controlled sync integration', () => {
   it('records a retryable transport failure durably', async () => {
     await seedPendingCommand();
     const transport: SyncTransport = { submit: async () => ({ kind: 'SERVER_ERROR', code: '503', message: 'unavailable', retryable: true }) };
-    const worker = new SyncWorker(undefined, transport);
+    const worker = new SyncWorker(transport);
     const result = await worker.runOnce(NOW);
     expect(result.status).toBe('RETRY_SCHEDULED');
     const row = await getDb().execute(`SELECT status, next_retry_at as nextRetryAt FROM command_ledger WHERE command_id='cmd-1'`);
