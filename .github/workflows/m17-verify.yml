@@ -46,9 +46,20 @@ jobs:
           path: sitesync/jest.log
           if-no-files-found: error
       - name: TypeScript check
-        run: npx tsc --noEmit
+        id: tsc
+        continue-on-error: true
+        run: npx tsc --noEmit --pretty false 2>&1 | tee tsc.log
+      - name: Upload TypeScript diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-tsc-log-${{ github.run_id }}
+          path: sitesync/tsc.log
+          if-no-files-found: error
       - name: ESLint
+        id: lint
+        continue-on-error: true
         run: npm run lint
-      - name: Fail if Jest failed
-        if: steps.jest.outcome != 'success'
+      - name: Fail verification if any gate failed
+        if: steps.jest.outcome != 'success' || steps.tsc.outcome != 'success' || steps.lint.outcome != 'success'
         run: exit 1
