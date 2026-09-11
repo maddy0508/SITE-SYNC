@@ -51,7 +51,7 @@ export class SyncWorker {
       const command = await this.repository.claimNextEligible(now);
       if (!command) return { status: 'IDLE' };
       return await this.submitClaim(command, now);
-    } catch (error) {
+    } catch {
       return { status: 'ERROR' };
     }
   }
