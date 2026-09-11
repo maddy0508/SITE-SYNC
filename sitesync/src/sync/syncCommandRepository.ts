@@ -1,6 +1,6 @@
 import type { CommandLedgerRecord } from '../domain/localPersistence';
 import { STALE_PROCESSING_THRESHOLD_MS, canTransitionCommand } from '../domain/localPersistence';
-import { getDb, withTransaction } from '../database/localPersistence';
+import { getDb, withTransaction, type Transaction } from '../database/localPersistence';
 
 export interface ClaimedSyncCommand extends CommandLedgerRecord {
   commandPayloadJson: string;
@@ -48,7 +48,15 @@ export class SyncCommandRepository {
     const cutoff = new Date(Date.parse(now) - STALE_PROCESSING_THRESHOLD_MS).toISOString();
     const result = await getDb().execute(
       `UPDATE command_ledger SET status='PENDING', processing_started_at=NULL, updated_at=?
-       WHERE status='PROCESSING' AND processing_started_at IS NOT NULL AND processing_started_at < ?`,
+       WHERE status='PROCESSING' AND processing_started_at IS NOT NULL AND processing_started_at < ?
+         AND attempt_count < max_attempts`,
+      [now, cutoff],
+    );
+    await getDb().execute(
+      `UPDATE command_ledger SET status='FAILED', server_error_code='MAX_ATTEMPTS',
+         failure_diagnostics='Processing claim became stale after max attempts', updated_at=?, processing_started_at=NULL
+       WHERE status='PROCESSING' AND processing_started_at IS NOT NULL AND processing_started_at < ?
+         AND attempt_count >= max_attempts`,
       [now, cutoff],
     );
     return result.rowsAffected;
@@ -58,6 +66,7 @@ export class SyncCommandRepository {
     return withTransaction(async (tx) => {
       const result = await tx.executeSql(
         `${SELECT} WHERE (status='PENDING' OR (status='RETRYABLE_FAILURE' AND (next_retry_at IS NULL OR next_retry_at <= ?)))
+          AND attempt_count < max_attempts
           AND NOT EXISTS (
             SELECT 1 FROM command_ledger earlier
             WHERE earlier.project_id = command_ledger.project_id
@@ -75,7 +84,7 @@ export class SyncCommandRepository {
       const nextAttempt = Number(candidate.attemptCount) + 1;
       const update = await tx.executeSql(
         `UPDATE command_ledger SET status='PROCESSING', attempt_count=?, processing_started_at=?, updated_at=?
-         WHERE command_id=? AND status IN ('PENDING','RETRYABLE_FAILURE')`,
+         WHERE command_id=? AND status IN ('PENDING','RETRYABLE_FAILURE') AND attempt_count < max_attempts`,
         [nextAttempt, now, now, commandId],
       );
       if (update.rowsAffected !== 1) return null;
@@ -84,20 +93,23 @@ export class SyncCommandRepository {
   }
 
   async markSucceeded(commandId: string, now: string, serverRevision: number, result: unknown): Promise<void> {
-    await this.transition(commandId, 'SUCCEEDED', {
-      serverRespondedAt: now, syncedAt: now, serverResultJson: JSON.stringify(result), serverErrorCode: null,
-      failureDiagnostics: null, nextRetryAt: null, updatedAt: now,
+    await withTransaction(async (tx) => {
+      const current = await this.getCommandInTransaction(tx, commandId);
+      await this.transitionInTransaction(tx, current, 'SUCCEEDED', {
+        serverRespondedAt: now, syncedAt: now, serverResultJson: JSON.stringify(result), serverErrorCode: null,
+        failureDiagnostics: null, nextRetryAt: null, updatedAt: now,
+      });
+      await tx.executeSql(
+        `UPDATE attendance_state SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE last_command_id=?`,
+        [serverRevision, now, commandId],
+      );
+      await tx.executeSql(
+        `UPDATE timesheet SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE (project_id, person_id, work_date_utc) IN (
+           SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
+         ) AND source_state_revision=(SELECT base_revision + 1 FROM command_ledger WHERE command_id=?)`,
+        [serverRevision, now, commandId, commandId],
+      );
     });
-    await getDb().execute(
-      `UPDATE attendance_state SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE last_command_id=?`,
-      [serverRevision, now, commandId],
-    );
-    await getDb().execute(
-      `UPDATE timesheet SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE (project_id, person_id, work_date_utc) IN (
-         SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
-       )`,
-      [serverRevision, now, commandId],
-    );
   }
 
   async markRetryableFailure(commandId: string, now: string, nextRetryAt: string, code: string, diagnostics: string): Promise<void> {
@@ -107,56 +119,79 @@ export class SyncCommandRepository {
   }
 
   async markFailed(commandId: string, now: string, code: string, diagnostics: string): Promise<void> {
-    await this.transition(commandId, 'FAILED', {
-      serverRespondedAt: now, serverErrorCode: code, failureDiagnostics: diagnostics, updatedAt: now,
+    await withTransaction(async (tx) => {
+      const current = await this.getCommandInTransaction(tx, commandId);
+      await this.transitionInTransaction(tx, current, 'FAILED', {
+        serverRespondedAt: now, serverErrorCode: code, failureDiagnostics: diagnostics, updatedAt: now,
+      });
+      await tx.executeSql(
+        `UPDATE attendance_state SET sync_status='FAILED', updated_at=? WHERE last_command_id=?`, [now, commandId],
+      );
+      await tx.executeSql(
+        `UPDATE timesheet SET sync_status='FAILED', updated_at=? WHERE (project_id, person_id, work_date_utc) IN (
+           SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
+         ) AND source_state_revision=(SELECT base_revision + 1 FROM command_ledger WHERE command_id=?)`,
+        [now, commandId, commandId],
+      );
     });
-    await getDb().execute(
-      `UPDATE attendance_state SET sync_status='FAILED', updated_at=? WHERE last_command_id=?`, [now, commandId],
-    );
-    await getDb().execute(
-      `UPDATE timesheet SET sync_status='FAILED', updated_at=? WHERE (project_id, person_id, work_date_utc) IN (
-         SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
-       )`, [now, commandId],
-    );
   }
 
   async markConflict(commandId: string, now: string, serverRevision: number, serverPayload: string | null, reasonCode: string): Promise<void> {
-    const commandResult = await getDb().execute(`${SELECT} WHERE command_id=?`, [commandId]);
-    if (commandResult.rows.length === 0) throw new Error(`Unknown command ${commandId}`);
-    const command = mapCommand(commandResult.rows.item(0) as unknown as Record<string, unknown>);
-    await this.transition(commandId, 'CONFLICT', {
-      serverRespondedAt: now, serverErrorCode: reasonCode, failureDiagnostics: reasonCode, updatedAt: now,
+    await withTransaction(async (tx) => {
+      const command = await this.getCommandInTransaction(tx, commandId);
+      await this.transitionInTransaction(tx, command, 'CONFLICT', {
+        serverRespondedAt: now, serverErrorCode: reasonCode, failureDiagnostics: reasonCode, updatedAt: now,
+      });
+      const conflictId = `conflict-${commandId}`;
+      await tx.executeSql(
+        `INSERT INTO conflict (conflict_id, command_id, entity_type, entity_id, local_revision, server_revision,
+          local_payload, server_payload, status, reason_code, reason, resolved_at, resolved_by, resolution_strategy, created_at, updated_at)
+         SELECT ?, command_id, 'ATTENDANCE_STATE',
+          json_object('projectId', project_id, 'personId', person_id,
+            'workDateUtc', (SELECT work_date_utc FROM attendance_event WHERE command_id=command_ledger.command_id LIMIT 1)),
+          COALESCE((SELECT current_revision FROM attendance_state WHERE last_command_id=command_ledger.command_id), base_revision + 1),
+          ?, command_payload_json, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
+         FROM command_ledger WHERE command_id=?`,
+        [conflictId, serverPayload, reasonCode, serverRevision, now, now, commandId],
+      );
+      await tx.executeSql(
+        `UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`,
+        [serverRevision, now, commandId],
+      );
+      await tx.executeSql(
+        `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=?
+         AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)
+         AND source_state_revision=(SELECT base_revision + 1 FROM command_ledger WHERE command_id=?)`,
+        [serverRevision, now, command.projectId, command.personId, commandId, commandId],
+      );
     });
-    const conflictId = `conflict-${commandId}`;
-    await getDb().execute(
-      `INSERT INTO conflict (conflict_id, command_id, entity_type, entity_id, local_revision, server_revision,
-        local_payload, server_payload, status, reason_code, reason, resolved_at, resolved_by, resolution_strategy, created_at, updated_at)
-       SELECT ?, command_id, 'ATTENDANCE_STATE',
-        json_object('projectId', project_id, 'personId', person_id,
-          'workDateUtc', (SELECT work_date_utc FROM attendance_event WHERE command_id=command_ledger.command_id LIMIT 1)),
-        COALESCE((SELECT current_revision FROM attendance_state WHERE last_command_id=command_ledger.command_id), base_revision + 1),
-        ?, command_payload_json, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
-       FROM command_ledger WHERE command_id=?`,
-      [conflictId, serverRevision, serverPayload, reasonCode, now, now, commandId],
-    );
-    await getDb().execute(
-      `UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`,
-      [serverRevision, now, commandId],
-    );
-    await getDb().execute(
-      `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=?
-       AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)`,
-      [serverRevision, now, command.projectId, command.personId, commandId],
-    );
+  }
+
+  private async getCommandInTransaction(tx: Transaction, commandId: string): Promise<ClaimedSyncCommand> {
+    const result = await tx.executeSql(`${SELECT} WHERE command_id=?`, [commandId]);
+    if (result.rows.length === 0) throw new Error(`Unknown command ${commandId}`);
+    return mapCommand(result.rows.item(0) as unknown as Record<string, unknown>);
   }
 
   private async transition(commandId: string, to: CommandLedgerRecord['status'], fields: Record<string, SqlFieldValue>): Promise<void> {
-    const result = await getDb().execute(`${SELECT} WHERE command_id=?`, [commandId]);
-    if (result.rows.length === 0) throw new Error(`Unknown command ${commandId}`);
-    const current = mapCommand(result.rows.item(0) as unknown as Record<string, unknown>);
+    await withTransaction(async (tx) => {
+      const current = await this.getCommandInTransaction(tx, commandId);
+      await this.transitionInTransaction(tx, current, to, fields);
+    });
+  }
+
+  private async transitionInTransaction(
+    tx: Transaction,
+    current: ClaimedSyncCommand,
+    to: CommandLedgerRecord['status'],
+    fields: Record<string, SqlFieldValue>,
+  ): Promise<void> {
     if (!canTransitionCommand(current.status, to)) throw new Error(`Invalid command transition ${current.status} -> ${to}`);
     const entries = Object.entries(fields);
     const setClause = entries.map(([key]) => `${key.replace(/[A-Z]/g, match => `_${match.toLowerCase()}`)}=?`).join(', ');
-    await getDb().execute(`UPDATE command_ledger SET status=?, ${setClause} WHERE command_id=?`, [to, ...entries.map(([, value]) => value), commandId]);
+    await tx.executeSql(
+      `UPDATE command_ledger SET status=?, ${setClause} WHERE command_id=?`,
+      [to, ...entries.map(([, value]) => value), current.commandId],
+    );
   }
 }
