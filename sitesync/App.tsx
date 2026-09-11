@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
+import { M15QaScreen } from './src/qr/M15QaScreen';
 import { QrScannerScreen } from './src/qr/QrScannerScreen';
 import { WorkerQrIdentityScreen } from './src/qr/WorkerQrIdentityScreen';
 import type { QrRosterResolver, TrustedMembershipRecord } from './src/qr/qrValidation';
@@ -79,7 +80,7 @@ const qaResolver: QrRosterResolver = {
   },
 };
 
-type Screen = 'home' | 'workerQr' | 'scanner';
+type Screen = 'home' | 'workerQr' | 'scanner' | 'qa';
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('home');
@@ -113,6 +114,15 @@ export default function App() {
     );
   }
 
+  if (screen === 'qa') {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
+        <M15QaScreen onBack={() => setScreen('home')} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
@@ -123,7 +133,7 @@ export default function App() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>QR ATTENDANCE</Text>
-          <Text style={styles.cardBody}>This test build exposes the M1.5 worker QR and camera scanner directly so the native flow can be verified on a physical device.</Text>
+          <Text style={styles.cardBody}>This test build exposes the M1.5 worker QR, camera scanner and self-contained validation suite directly so the native and business-rule flows can be verified without requiring a second device.</Text>
         </View>
 
         <Pressable style={styles.primary} onPress={() => setScreen('scanner')}>
@@ -131,6 +141,9 @@ export default function App() {
         </Pressable>
         <Pressable style={styles.secondary} onPress={() => setScreen('workerQr')}>
           <Text style={styles.secondaryText}>SHOW WORKER QR</Text>
+        </Pressable>
+        <Pressable style={styles.qaButton} onPress={() => setScreen('qa')}>
+          <Text style={styles.qaButtonText}>RUN M1.5 QA SUITE</Text>
         </Pressable>
 
         <View style={styles.footer}>
@@ -156,7 +169,9 @@ const styles = StyleSheet.create({
   primaryText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
   secondary: { marginTop: 10, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#F3B33D' },
   secondaryText: { color: '#0D1733', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  footer: { marginTop: 26 },
+  qaButton: { marginTop: 10, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: '#E8ECF4', borderWidth: 1, borderColor: '#CBD3E3' },
+  qaButtonText: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  footer: { marginTop: 22 },
   footerTitle: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
   footerText: { marginTop: 4, color: '#7A8499', fontSize: 11, lineHeight: 16 },
   header: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
