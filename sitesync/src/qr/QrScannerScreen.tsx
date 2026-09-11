@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useCameraPermission } from 'react-native-vision-camera';
-import { CodeScanner } from 'react-native-vision-camera-barcode-scanner';
+import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
+import { useBarcodeScannerOutput } from 'react-native-vision-camera-barcode-scanner';
 import { reduceQrCameraState } from './qrCameraState';
 import type { QrCameraState } from './qrCameraState';
 import { QrCameraFrameAdapter } from './qrCameraFrameAdapter';
@@ -57,8 +57,11 @@ function getMessage(state: QrCameraState, error: Error | null, result: QrValidat
 
 export function QrScannerScreen({ context, resolver, online, isFocused = true, onScanAccepted }: QrScannerScreenProps) {
   const { hasPermission, canRequestPermission, requestPermission } = useCameraPermission();
+  const device = useCameraDevice('back');
   const [cameraState, setCameraState] = useState<QrCameraState>('idle');
   const [appActive, setAppActive] = useState(AppState.currentState === 'active');
+  const [cameraInitialized, setCameraInitialized] = useState(false);
+  const [scannerAttached, setScannerAttached] = useState(false);
   const [result, setResult] = useState<QrValidationResult | null>(null);
   const [scannerError, setScannerError] = useState<Error | null>(null);
   const controller = useMemo(() => new QrScanController(), []);
@@ -70,6 +73,10 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
     const subscription = AppState.addEventListener('change', (nextState) => {
       const active = nextState === 'active';
       setAppActive(active);
+      if (!active) {
+        setScannerAttached(false);
+        setCameraInitialized(false);
+      }
       setCameraState((current) => reduceQrCameraState(current, { type: active ? 'APPROACH_ACTIVE' : 'APPROACH_INACTIVE' }));
     });
     return () => subscription.remove();
@@ -80,6 +87,8 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
       setCameraState((current) => reduceQrCameraState(current, { type: 'PERMISSION_GRANTED' }));
       return;
     }
+    setCameraInitialized(false);
+    setScannerAttached(false);
     if (!canRequestPermission) {
       setCameraState('permission_blocked');
       return;
@@ -105,6 +114,8 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
     controller.reset();
     setResult(null);
     setScannerError(null);
+    setCameraInitialized(false);
+    setScannerAttached(false);
     setCameraState(hasPermission ? 'ready' : canRequestPermission ? 'idle' : 'permission_blocked');
   }, [canRequestPermission, controller, hasPermission]);
 
@@ -129,8 +140,27 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
     }
   }, [adapter, cameraState, context, onScanAccepted, online, validation]);
 
+  const handleCameraError = useCallback((error: Error) => {
+    setScannerError(error);
+    setScannerAttached(false);
+    setCameraInitialized(false);
+    setCameraState('error');
+  }, []);
+
+  const handleCameraInitialized = useCallback(() => {
+    setCameraInitialized(true);
+    setScannerAttached(true);
+  }, []);
+
+  const barcodeOutput = useBarcodeScannerOutput({
+    barcodeFormats: ['qr-code'],
+    outputResolution: 'preview',
+    onBarcodeScanned: handleBarcodeScanned,
+    onError: handleCameraError,
+  });
+
   const message = getMessage(cameraState, scannerError, result);
-  const isScanning = hasPermission && appActive && isFocused && cameraState === 'ready';
+  const isCameraActive = hasPermission && appActive && isFocused && cameraState === 'ready';
 
   return (
     <View style={styles.screen} testID="qr-scanner-screen">
@@ -145,16 +175,14 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
       </View>
 
       <View style={styles.scannerFrame}>
-        {hasPermission ? (
-          <CodeScanner
+        {hasPermission && device ? (
+          <Camera
             style={StyleSheet.absoluteFill}
-            isActive={isScanning}
-            barcodeFormats={['qr-code']}
-            onBarcodeScanned={handleBarcodeScanned}
-            onError={(error) => {
-              setScannerError(error);
-              setCameraState('error');
-            }}
+            device={device}
+            isActive={isCameraActive}
+            outputs={scannerAttached ? [barcodeOutput] : []}
+            onInitialized={handleCameraInitialized}
+            onError={handleCameraError}
           />
         ) : (
           <View style={styles.cameraPlaceholder}>
@@ -163,13 +191,19 @@ export function QrScannerScreen({ context, resolver, online, isFocused = true, o
           </View>
         )}
 
-        {hasPermission && isScanning ? (
+        {hasPermission && cameraInitialized && scannerAttached && isCameraActive ? (
           <View pointerEvents="none" style={styles.scanTarget}>
             <View style={[styles.corner, styles.cornerTopLeft]} />
             <View style={[styles.corner, styles.cornerTopRight]} />
             <View style={[styles.corner, styles.cornerBottomLeft]} />
             <View style={[styles.corner, styles.cornerBottomRight]} />
             <Text style={styles.scanHint}>ALIGN QR CODE</Text>
+          </View>
+        ) : null}
+
+        {hasPermission && !cameraInitialized && isCameraActive ? (
+          <View pointerEvents="none" style={styles.startingOverlay}>
+            <Text style={styles.processingTitle}>STARTING CAMERA</Text>
           </View>
         ) : null}
 
@@ -221,6 +255,7 @@ const styles = StyleSheet.create({
   cornerBottomLeft: { bottom: '28%', left: '12%', borderBottomWidth: 4, borderLeftWidth: 4 },
   cornerBottomRight: { bottom: '28%', right: '12%', borderBottomWidth: 4, borderRightWidth: 4 },
   scanHint: { position: 'absolute', bottom: '21%', color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.6 },
+  startingOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13, 23, 51, 0.55)' },
   processingOverlay: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(13, 23, 51, 0.82)' },
   processingTitle: { color: '#F3B33D', fontSize: 14, fontWeight: '900', letterSpacing: 1.5 },
   processingBody: { marginTop: 8, color: '#FFFFFF', fontSize: 13 },
