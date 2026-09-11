@@ -50,7 +50,7 @@ function request(overrides: Partial<Parameters<typeof AttendanceService.checkIn>
 describe('M1.6 transactional attendance service', () => {
   beforeEach(async () => {
     await closeDatabase();
-    testDatabaseName = `m16-attendance-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.db`;
+    testDatabaseName = `m16-attendance-${Date.now()}-${Math.random().toString(36).slice(2)}.db`;
     await initializeDatabase(testDatabaseName);
   });
 
