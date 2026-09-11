@@ -33,6 +33,7 @@ describe('sync worker', () => {
     const first = worker.runOnce('2026-09-12T00:00:00.000Z');
     const second = worker.runOnce('2026-09-12T00:00:00.000Z');
     await Promise.resolve();
+    await Promise.resolve();
     expect(transport.submit).toHaveBeenCalledTimes(1);
     release();
     await Promise.all([first, second]);
