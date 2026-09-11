@@ -8,8 +8,8 @@ import type {
   TimesheetRecord,
 } from '../domain/localPersistence';
 import { M1_TIMESHEET_POLICY } from '../domain/localPersistence';
-import { withTransaction, validateUtcTimestamp } from '../database/localPersistence';
-import { authorizeAttendance } from './attendanceAuthorization';
+import { withTransaction, validateUtcTimestamp, getProjectRoster } from '../database/localPersistence';
+import { authorizeAttendance, targetAssignmentMatchesTrustedRoster } from './attendanceAuthorization';
 import { buildAttendanceCommand, type AttendanceCommand } from './attendanceCommands';
 
 export type AttendanceAction = 'CHECK_IN' | 'CHECK_OUT';
@@ -124,6 +124,16 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
   }
   if (!validateUtcTimestamp(request.clientOccurredAt)) {
     throw new AttendanceError('INVALID_CONTEXT', 'clientOccurredAt must be a valid UTC timestamp');
+  }
+
+  // For QR attendance, the caller-provided assignment is only an input hint.
+  // The mutation boundary independently checks it against trusted cached roster
+  // data before authorization can grant mutation authority.
+  if (request.source === 'QR_SCAN') {
+    const trustedRoster = await getProjectRoster(request.projectId, request.targetPersonId);
+    if (!request.targetAssignment || !trustedRoster || !targetAssignmentMatchesTrustedRoster(request.targetAssignment, trustedRoster)) {
+      throw new AttendanceError('INVALID_CONTEXT', 'Target assignment does not match trusted local project roster');
+    }
   }
 
   const authorization = authorizeAttendance(request);
