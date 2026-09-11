@@ -25,123 +25,60 @@
 
 ---
 
-### Task 1: Define sync transport contract
+## Execution status
 
-**Files:**
-- Create: `sitesync/src/sync/syncTransport.ts`
-- Test: `sitesync/__tests__/syncTransport.test.ts`
+- [x] Branch created from M1.6 merge commit.
+- [x] Implementation plan committed.
+- [x] Transport contract tests + implementation.
+- [x] Deterministic command claim repository + tests.
+- [x] Retry classification/backoff + tests.
+- [x] Sync worker lifecycle + tests.
+- [x] Controlled SQLite integration coverage.
+- [x] M1.7 verification workflow.
+- [ ] GitHub Actions verification.
+- [ ] Fix any CI failures.
+- [ ] Final duplicate/conflict/restart integration evidence.
+- [ ] PR review and merge.
 
-**Interfaces:**
-- `SyncTransport.submit(command): Promise<SyncTransportResponse>`
-- Request contains command ID, aggregate identity, base revision and exact persisted command payload.
-- Response discriminates `ACCEPTED`, `DUPLICATE_ACCEPTED`, `REVISION_CONFLICT`, `AUTHORIZATION_REJECTED`, `VALIDATION_REJECTED`, `DEVICE_REVOKED`, and `SERVER_ERROR`.
+## Current implementation
 
-- [ ] Write failing tests for exhaustive response discrimination.
-- [ ] Write failing tests proving the request carries the persisted payload rather than reconstructing it from mutable UI state.
-- [ ] Implement types and a no-op controlled transport fixture.
-- [ ] Run focused Jest tests.
-- [ ] Commit.
+### Task 1 — Transport contract
+- [x] `sitesync/src/sync/syncTransport.ts`
+- [x] Explicit response discriminants.
+- [x] Persisted-payload parser.
 
-### Task 2: Add deterministic command selection and claim repository
+### Task 2 — Command selection/claiming
+- [x] `sitesync/src/sync/syncCommandRepository.ts`
+- [x] Deterministic order.
+- [x] Retry eligibility.
+- [x] Per-project/person sequential processing.
+- [x] Atomic claim.
+- [x] Stale claim recovery.
 
-**Files:**
-- Create: `sitesync/src/sync/syncCommandRepository.ts`
-- Test: `sitesync/__tests__/syncCommandRepository.test.ts`
+### Task 3 — Worker
+- [x] `sitesync/src/sync/syncWorker.ts`
+- [x] In-process mutex.
+- [x] Startup/manual triggers.
+- [x] Explicit response routing.
 
-**Interfaces:**
-- `claimNextEligible(now): Promise<CommandLedgerRecord | null>`
-- `releaseStaleClaims(now): Promise<number>`
-- `markSucceeded(...)`, `markRetryableFailure(...)`, `markFailed(...)`, `markConflict(...)`.
+### Task 4 — Retry policy
+- [x] `sitesync/src/sync/syncRetryPolicy.ts`
+- [x] Retryable/durable/conflict classification.
+- [x] Bounded exponential backoff.
+- [x] Attempt exhaustion.
 
-Selection rules:
-- `PENDING` is eligible immediately.
-- `RETRYABLE_FAILURE` is eligible only when `next_retry_at` is null or <= now.
-- Ordering is `created_at ASC, command_id ASC`.
-- Per aggregate, only the earliest outstanding command is eligible.
-- Claim changes `PENDING`/`RETRYABLE_FAILURE` → `PROCESSING` atomically and increments `attempt_count`.
-- Claims older than the stale threshold return to `PENDING` before selection.
+### Task 5 — Controlled integration
+- [x] Accepted response.
+- [x] Durable success state.
+- [x] Retry persistence.
+- [ ] Duplicate replay.
+- [ ] Revision conflict.
+- [ ] Restart/resume.
 
-- [ ] Write failing tests for deterministic order.
-- [ ] Test `next_retry_at` filtering.
-- [ ] Test per-aggregate sequential processing.
-- [ ] Test atomic claim prevents a second claim.
-- [ ] Test stale processing recovery.
-- [ ] Implement minimal SQL repository operations using the existing transaction boundary.
-- [ ] Run focused tests.
-- [ ] Commit.
-
-### Task 3: Implement sync worker lifecycle and mutex
-
-**Files:**
-- Create: `sitesync/src/sync/syncWorker.ts`
-- Test: `sitesync/__tests__/syncWorker.test.ts`
-
-**Interfaces:**
-- `SyncWorker.runOnce(now?): Promise<SyncRunResult>`
-- `SyncWorker.start(): void`
-- `SyncWorker.stop(): void`
-- `SyncWorker.requestSync(reason): Promise<void>`
-
-- [ ] Test concurrent `runOnce` calls collapse to one active worker.
-- [ ] Test startup stale-claim recovery.
-- [ ] Test one command is claimed and submitted exactly once per run.
-- [ ] Test no eligible command produces an idle result.
-- [ ] Implement in-process mutex plus repository claim protection.
-- [ ] Implement startup and explicit trigger hooks; network callback integration remains an adapter boundary for this slice.
-- [ ] Run focused tests.
-- [ ] Commit.
-
-### Task 4: Persist response classification and retry policy
-
-**Files:**
-- Modify: `sitesync/src/sync/syncCommandRepository.ts`
-- Modify: `sitesync/src/sync/syncWorker.ts`
-- Create: `sitesync/src/sync/syncRetryPolicy.ts`
-- Test: `sitesync/__tests__/syncRetryPolicy.test.ts`
-- Modify: `sitesync/__tests__/syncWorker.test.ts`
-
-Policy:
-- Timeout/transport/server-unavailable → retryable.
-- Authorization/validation/device-revocation → durable failure.
-- Revision conflict → conflict.
-- `ACCEPTED` and `DUPLICATE_ACCEPTED` → success.
-- Exponential persisted backoff with bounded delay; attempt exhaustion becomes `FAILED`.
-
-- [ ] Write failing classification tests.
-- [ ] Write failing backoff/exhaustion tests.
-- [ ] Implement policy without wall-clock dependence in tests.
-- [ ] Persist server response/error diagnostics.
-- [ ] Run focused tests.
-- [ ] Commit.
-
-### Task 5: Controlled end-to-end synchronization tests
-
-**Files:**
-- Create: `sitesync/__tests__/syncEngine.integration.test.ts`
-
-- [ ] Seed a real test SQLite database with an M1.6 pending check-in command.
-- [ ] Submit through a controlled `ACCEPTED` transport.
-- [ ] Assert command becomes `SUCCEEDED` and history remains.
-- [ ] Submit the same command through `DUPLICATE_ACCEPTED` and assert no duplicate local effect.
-- [ ] Simulate transport loss and verify persisted retry state.
-- [ ] Restart the worker and verify the command resumes.
-- [ ] Simulate a revision conflict and assert `CONFLICT` without fabricating verified state.
-- [ ] Run integration tests.
-- [ ] Commit.
-
-### Task 6: Verification workflow and Linear evidence
-
-**Files:**
-- Create: `.github/workflows/m17-verify.yml`
-- Modify: Linear MMM-35 with exact evidence and checked items.
-
-- [ ] Run Jest.
-- [ ] Run TypeScript.
-- [ ] Run ESLint.
-- [ ] Verify the M1.7 test suite uses only controlled transport fixtures.
-- [ ] Verify no production Supabase credentials or writes are introduced.
-- [ ] Record exact results.
-- [ ] Commit.
+### Task 6 — Verification
+- [x] `.github/workflows/m17-verify.yml` added.
+- [ ] Jest/TypeScript/ESLint execution evidence.
+- [ ] No production Supabase changes.
 
 ## Definition of Done
 
