@@ -3,7 +3,7 @@ import { closeDatabase, getDb, initializeDatabase } from '../src/database/localP
 import type { ApplicationContext } from '../src/identity/projectContext';
 import type { ProjectAssignment } from '../src/identity/identityService';
 
-const TEST_DATABASE_NAME = `m16-attendance-${process.pid}-${Date.now()}.db`;
+let testDatabaseName = '';
 const ORG = 'org-1';
 const COMPANY = 'company-1';
 const PROJECT = 'project-1';
@@ -50,7 +50,8 @@ function request(overrides: Partial<Parameters<typeof AttendanceService.checkIn>
 describe('M1.6 transactional attendance service', () => {
   beforeEach(async () => {
     await closeDatabase();
-    await initializeDatabase(TEST_DATABASE_NAME);
+    testDatabaseName = `m16-attendance-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}.db`;
+    await initializeDatabase(testDatabaseName);
   });
 
   afterAll(async () => {
@@ -207,7 +208,7 @@ describe('M1.6 transactional attendance service', () => {
     });
 
     await closeDatabase();
-    await initializeDatabase(TEST_DATABASE_NAME);
+    await initializeDatabase(testDatabaseName);
 
     const result = await AttendanceService.checkOut({
       ...request({
