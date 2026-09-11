@@ -9,13 +9,18 @@ export interface SyncRunResult {
   commandId?: string;
 }
 
+export type SyncCommandRepositoryPort = Pick<
+  SyncCommandRepository,
+  'releaseStaleClaims' | 'claimNextEligible' | 'markSucceeded' | 'markRetryableFailure' | 'markFailed' | 'markConflict'
+>;
+
 export class SyncWorker {
   private running: Promise<SyncRunResult> | null = null;
   private started = false;
 
   constructor(
     private readonly transport: SyncTransport,
-    private readonly repository: SyncCommandRepository = new SyncCommandRepository(),
+    private readonly repository: SyncCommandRepositoryPort = new SyncCommandRepository(),
   ) {}
 
   start(): void {
@@ -82,10 +87,6 @@ export class SyncWorker {
         await this.repository.markConflict(command.commandId, now, response.serverRevision, response.serverPayload, response.reasonCode);
         return { status: 'CONFLICT', commandId: command.commandId };
       case 'FAILED':
-        if (response.kind === 'AUTHORIZATION_REJECTED' || response.kind === 'VALIDATION_REJECTED' || response.kind === 'DEVICE_REVOKED') {
-          await this.repository.markFailed(command.commandId, now, response.code, response.message);
-          return { status: 'FAILED', commandId: command.commandId };
-        }
         await this.repository.markFailed(command.commandId, now, response.code, response.message);
         return { status: 'FAILED', commandId: command.commandId };
       case 'RETRYABLE_FAILURE':
