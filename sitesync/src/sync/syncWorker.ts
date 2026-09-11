@@ -78,18 +78,22 @@ export class SyncWorker {
 
     const classification = classifySyncResponse(response);
     switch (classification) {
-      case 'SUCCEEDED':
+      case 'SUCCEEDED': {
         if (response.kind !== 'ACCEPTED' && response.kind !== 'DUPLICATE_ACCEPTED') throw new Error('Invalid success response');
         await this.repository.markSucceeded(command.commandId, now, response.serverRevision, response.result);
         return { status: 'SUCCEEDED', commandId: command.commandId };
-      case 'CONFLICT':
+      }
+      case 'CONFLICT': {
         if (response.kind !== 'REVISION_CONFLICT') throw new Error('Invalid conflict response');
         await this.repository.markConflict(command.commandId, now, response.serverRevision, response.serverPayload, response.reasonCode);
         return { status: 'CONFLICT', commandId: command.commandId };
-      case 'FAILED':
+      }
+      case 'FAILED': {
+        if (!('code' in response) || !('message' in response)) throw new Error('Invalid failure response');
         await this.repository.markFailed(command.commandId, now, response.code, response.message);
         return { status: 'FAILED', commandId: command.commandId };
-      case 'RETRYABLE_FAILURE':
+      }
+      case 'RETRYABLE_FAILURE': {
         if (response.kind !== 'SERVER_ERROR') throw new Error('Invalid retryable response');
         if (command.attemptCount >= command.maxAttempts) {
           await this.repository.markFailed(command.commandId, now, response.code, response.message);
@@ -103,6 +107,7 @@ export class SyncWorker {
           response.message,
         );
         return { status: 'RETRY_SCHEDULED', commandId: command.commandId };
+      }
     }
   }
 }
