@@ -52,4 +52,19 @@ describe('M1.6 attendance authorization', () => {
     const otherProject = { ...targetAssignment, projectId: 'project-other' };
     expect(authorizeAttendance({ context: context([supervisorAssignment]), projectId: PROJECT, targetPersonId: TARGET, targetAssignment: otherProject, source: 'QR_SCAN' })).toMatchObject({ allowed: false, code: 'TARGET_PROJECT_UNASSIGNED' });
   });
+
+  it('denies a target from another organisation', () => {
+    const otherOrganisation = { ...targetAssignment, organisationId: 'org-other' };
+    expect(authorizeAttendance({ context: context([supervisorAssignment]), projectId: PROJECT, targetPersonId: TARGET, targetAssignment: otherOrganisation, source: 'QR_SCAN' })).toMatchObject({ allowed: false, code: 'TARGET_ORGANISATION_MISMATCH' });
+  });
+
+  it('denies a target from another company', () => {
+    const otherCompany = { ...targetAssignment, companyId: 'company-other' };
+    expect(authorizeAttendance({ context: context([supervisorAssignment]), projectId: PROJECT, targetPersonId: TARGET, targetAssignment: otherCompany, source: 'QR_SCAN' })).toMatchObject({ allowed: false, code: 'TARGET_COMPANY_MISMATCH' });
+  });
+
+  it('denies an inactive target assignment', () => {
+    const inactive = { ...targetAssignment, status: 'INACTIVE' } as ProjectAssignment;
+    expect(authorizeAttendance({ context: context([supervisorAssignment]), projectId: PROJECT, targetPersonId: TARGET, targetAssignment: inactive, source: 'QR_SCAN' })).toMatchObject({ allowed: false, code: 'TARGET_ASSIGNMENT_INACTIVE' });
+  });
 });
