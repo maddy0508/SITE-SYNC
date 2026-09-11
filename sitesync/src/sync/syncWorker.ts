@@ -14,6 +14,10 @@ export type SyncCommandRepositoryPort = Pick<
   'releaseStaleClaims' | 'claimNextEligible' | 'markSucceeded' | 'markRetryableFailure' | 'markFailed' | 'markConflict'
 >;
 
+export interface SyncDeviceContext {
+  getDeviceInstallationId(): Promise<string | null>;
+}
+
 export class SyncWorker {
   private running: Promise<SyncRunResult> | null = null;
   private started = false;
@@ -21,6 +25,7 @@ export class SyncWorker {
   constructor(
     private readonly transport: SyncTransport,
     private readonly repository: SyncCommandRepositoryPort = new SyncCommandRepository(),
+    private readonly deviceContext?: SyncDeviceContext,
   ) {}
 
   start(): void {
@@ -60,10 +65,27 @@ export class SyncWorker {
     let response: SyncTransportResponse;
     try {
       const payload = parsePersistedAttendancePayload(command);
+      const deviceInstallationId = await this.deviceContext?.getDeviceInstallationId();
+      if (!deviceInstallationId) {
+        const message = 'No active local device installation is available for sync';
+        if (command.attemptCount >= command.maxAttempts) {
+          await this.repository.markFailed(command.commandId, now, 'DEVICE_CONTEXT', message);
+          return { status: 'FAILED', commandId: command.commandId };
+        }
+        await this.repository.markRetryableFailure(
+          command.commandId,
+          now,
+          computeRetryAt(now, command.attemptCount),
+          'DEVICE_CONTEXT',
+          message,
+        );
+        return { status: 'RETRY_SCHEDULED', commandId: command.commandId };
+      }
       response = await this.transport.submit({
         command,
         aggregate: { projectId: command.projectId, personId: command.personId, workDateUtc: payload.workDateUtc },
         payload,
+        deviceInstallationId,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Transport failure';
