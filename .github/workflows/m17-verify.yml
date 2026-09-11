@@ -35,38 +35,8 @@ jobs:
       - name: Install exact dependency graph
         run: npm ci --ignore-scripts
       - name: Run full Jest suite
-        id: jest
-        continue-on-error: true
-        run: npm test -- --runInBand 2>&1 | tee jest.log
-      - name: Upload Jest diagnostic log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: m17-jest-log-${{ github.run_id }}
-          path: sitesync/jest.log
-          if-no-files-found: error
+        run: npm test -- --runInBand
       - name: TypeScript check
-        id: tsc
-        continue-on-error: true
-        run: npx tsc --noEmit 2>&1 | tee tsc.log
-      - name: Upload TypeScript diagnostic log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: m17-tsc-log-${{ github.run_id }}
-          path: sitesync/tsc.log
-          if-no-files-found: error
+        run: npx tsc --noEmit
       - name: ESLint
-        id: lint
-        continue-on-error: true
-        run: npm run lint 2>&1 | tee eslint.log
-      - name: Upload ESLint diagnostic log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: m17-eslint-log-${{ github.run_id }}
-          path: sitesync/eslint.log
-          if-no-files-found: error
-      - name: Fail verification if any gate failed
-        if: steps.jest.outcome != 'success' || steps.tsc.outcome != 'success' || steps.lint.outcome != 'success'
-        run: exit 1
+        run: npm run lint
