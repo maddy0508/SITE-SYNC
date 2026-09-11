@@ -79,6 +79,29 @@ async function runM16DeviceSuite(): Promise<Result[]> {
     detail: survived ? 'Attendance state survived database close/reopen' : 'Attendance state did not survive restart',
   });
 
+  try {
+    await AttendanceService.checkOut({
+      context,
+      projectId: PROJECT,
+      targetPersonId: PERSON,
+      targetAssignment: assignment,
+      source: 'SELF',
+      clientOccurredAt: '2026-09-11T15:00:00.000Z',
+      online: false,
+      commandId: 'm16-qa-rollback-command',
+      eventId: 'm16-qa-event-in',
+    });
+    results.push({ name: 'Rollback on event failure', passed: false, detail: 'Unexpectedly accepted duplicate event ID' });
+  } catch {
+    const rollbackCount = await getDb().execute('SELECT COUNT(*) AS count FROM command_ledger WHERE command_id = ?', ['m16-qa-rollback-command']);
+    const rolledBack = rollbackCount.rows.item(0)?.count === 0;
+    results.push({
+      name: 'Rollback on event failure',
+      passed: rolledBack,
+      detail: rolledBack ? 'Command insert rolled back with failed event insert' : 'Partial command record remained',
+    });
+  }
+
   const checkOut = await AttendanceService.checkOut({
     context,
     projectId: PROJECT,
@@ -96,33 +119,7 @@ async function runM16DeviceSuite(): Promise<Result[]> {
     detail: `${checkOut.timesheet.status} · ${checkOut.timesheet.totalMinutes ?? 'null'} minutes`,
   });
 
-  await expectRollback(results);
   return results;
-}
-
-async function expectRollback(results: Result[]): Promise<void> {
-  try {
-    await AttendanceService.checkIn({
-      context,
-      projectId: PROJECT,
-      targetPersonId: PERSON,
-      targetAssignment: assignment,
-      source: 'SELF',
-      clientOccurredAt: '2026-09-11T17:00:00.000Z',
-      online: false,
-      commandId: 'm16-qa-rollback-command',
-      eventId: 'm16-qa-event-in',
-    });
-    results.push({ name: 'Rollback on mutation failure', passed: false, detail: 'Unexpectedly accepted an invalid second check-in' });
-  } catch {
-    const db = getDb();
-    const count = await db.execute('SELECT COUNT(*) AS count FROM command_ledger WHERE command_id = ?', ['m16-qa-rollback-command']);
-    results.push({
-      name: 'Rollback on mutation failure',
-      passed: count.rows.item(0)?.count === 0,
-      detail: count.rows.item(0)?.count === 0 ? 'Failed mutation left no command record' : 'Partial command record remained',
-    });
-  }
 }
 
 export function M16QaScreen({ onBack }: { onBack: () => void }) {
