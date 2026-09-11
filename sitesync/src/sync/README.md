@@ -7,3 +7,5 @@ The current foundation deliberately uses an injected `SyncTransport`. It does no
 The command ledger remains durable SQLite state. A command moves through `PENDING` → `PROCESSING` → `SUCCEEDED`, `RETRYABLE_FAILURE`, `FAILED`, or `CONFLICT`. Attendance state becomes `ONLINE_VERIFIED` only after an explicit successful server response is persisted.
 
 Production transport is a later M1.7 slice after the local worker and reconciliation semantics pass controlled verification.
+
+CI verification is required before merge.
