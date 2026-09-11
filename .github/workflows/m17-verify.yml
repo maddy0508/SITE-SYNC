@@ -35,8 +35,20 @@ jobs:
       - name: Install exact dependency graph
         run: npm ci --ignore-scripts
       - name: Run full Jest suite
-        run: npm test -- --runInBand
+        id: jest
+        continue-on-error: true
+        run: npm test -- --runInBand 2>&1 | tee jest.log
+      - name: Upload Jest diagnostic log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m17-jest-log-${{ github.run_id }}
+          path: sitesync/jest.log
+          if-no-files-found: error
       - name: TypeScript check
         run: npx tsc --noEmit
       - name: ESLint
         run: npm run lint
+      - name: Fail if Jest failed
+        if: steps.jest.outcome != 'success'
+        run: exit 1
