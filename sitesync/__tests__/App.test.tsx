@@ -19,6 +19,8 @@ jest.mock('react-native-vision-camera-barcode-scanner', () => ({
   useBarcodeScannerOutput: () => ({}),
 }));
 
+jest.mock('react-native-qrcode-svg', () => 'QRCode');
+
 import App from '../App';
 
 test('renders correctly', async () => {
