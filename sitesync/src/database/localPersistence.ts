@@ -14,7 +14,7 @@ import {
 } from '../domain/localPersistence';
 
 export const DATABASE_NAME = 'site_sync.db';
-export const DATABASE_SCHEMA_VERSION = 1;
+export const DATABASE_SCHEMA_VERSION = 2;
 
 let dbInstance: SQLiteDatabase | null = null;
 let dbNameInUse = DATABASE_NAME;
@@ -66,6 +66,8 @@ export async function initializeDatabase(databaseName: string = DATABASE_NAME): 
       if (currentVersion === 0) {
         await createSchema(dbInstance);
         await dbInstance.execute(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION};`);
+      } else if (currentVersion === 1) {
+        await migrateSchemaV1ToV2(dbInstance);
       } else if (currentVersion !== DATABASE_SCHEMA_VERSION) {
         throw new Error(`Unsupported schema version ${currentVersion}. Expected ${DATABASE_SCHEMA_VERSION}`);
       }
@@ -151,7 +153,8 @@ async function createSchema(db: SQLiteDatabase): Promise<void> {
       server_error_code TEXT,
       failure_diagnostics TEXT,
       created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      updated_at TEXT NOT NULL,
+      command_payload_json TEXT NOT NULL DEFAULT '{}'
     );`);
 
     await tx.executeSql(`CREATE TABLE attendance_event (
@@ -247,6 +250,17 @@ async function createSchema(db: SQLiteDatabase): Promise<void> {
   });
 }
 
+async function migrateSchemaV1ToV2(db: SQLiteDatabase): Promise<void> {
+  await db.transactionAsync(async (tx: Transaction) => {
+    const columns = await tx.executeSql('PRAGMA table_info(command_ledger);');
+    const hasPayload = columns.rows.some((row) => row.name === 'command_payload_json');
+    if (!hasPayload) {
+      await tx.executeSql("ALTER TABLE command_ledger ADD COLUMN command_payload_json TEXT NOT NULL DEFAULT '{}';");
+    }
+    await tx.executeSql(`PRAGMA user_version = ${DATABASE_SCHEMA_VERSION};`);
+  });
+}
+
 async function verifySchema(db: SQLiteDatabase): Promise<void> {
   const expectedTables = ['local_device_session','project_context','project_roster','command_ledger','attendance_event','attendance_state','timesheet','conflict'];
   const expectedIndexes = ['idx_event_lookup','idx_ledger_retry','idx_ledger_processing','idx_roster_project','idx_conflict_command'];
@@ -263,6 +277,11 @@ async function verifySchema(db: SQLiteDatabase): Promise<void> {
   for (const trigger of expectedTriggers) {
     const result = await db.execute(`SELECT name FROM sqlite_master WHERE type='trigger' AND name='${trigger}';`);
     if (result.rows.length === 0) throw new Error(`Trigger ${trigger} missing`);
+  }
+
+  const commandColumns = await db.execute('PRAGMA table_info(command_ledger);');
+  if (!commandColumns.rows.some((row: any) => row.name === 'command_payload_json')) {
+    throw new Error('Required schema column missing: command_payload_json');
   }
 
   const tableChecks: Record<string, { pk: string[]; fk: string[] }> = {
@@ -293,6 +312,7 @@ async function verifySchema(db: SQLiteDatabase): Promise<void> {
     'CHECK (max_attempts > 0)',
     'CHECK (total_minutes IS NULL OR total_minutes >= 0)',
     "CHECK (policy = 'M1_FIRST_IN_LAST_OUT_UTC')",
+    'command_payload_json',
     'prevent_attendance_event_update',
     'prevent_attendance_event_delete',
     'prevent_conflict_delete',
