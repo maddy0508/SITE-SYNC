@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "node scripts/agent-hooks/verify-agent-change.mjs",
+        "timeout": 5
+      }
+    ]
+  }
+}
