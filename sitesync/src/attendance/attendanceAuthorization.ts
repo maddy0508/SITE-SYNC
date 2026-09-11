@@ -1,6 +1,7 @@
 import type { CommandSource } from '../domain/localPersistence';
 import type { ProjectAssignment } from '../identity/identityService';
 import type { ApplicationContext } from '../identity/projectContext';
+import type { ProjectRosterRecord } from '../domain/localPersistence';
 
 export type AttendanceAuthorizationCode =
   | 'ACTOR_UNASSIGNED'
@@ -9,7 +10,8 @@ export type AttendanceAuthorizationCode =
   | 'TARGET_ASSIGNMENT_INACTIVE'
   | 'TARGET_ORGANISATION_MISMATCH'
   | 'TARGET_COMPANY_MISMATCH'
-  | 'TARGET_PERSON_MISMATCH';
+  | 'TARGET_PERSON_MISMATCH'
+  | 'TARGET_ROSTER_MISMATCH';
 
 export interface AttendanceAuthorizationRequest {
   context: ApplicationContext;
@@ -27,6 +29,26 @@ function activeAssignmentFor(context: ApplicationContext, projectId: string): Pr
   return context.activeProjectAssignments.find(
     (assignment) => assignment.projectId === projectId && assignment.status === 'ACTIVE',
   ) ?? null;
+}
+
+/**
+ * Compares a caller-supplied assignment against trusted local roster data.
+ * The roster remains non-authoritative; it only proves that the supplied
+ * assignment corresponds to the locally cached project/person relationship.
+ */
+export function targetAssignmentMatchesTrustedRoster(
+  assignment: ProjectAssignment,
+  roster: ProjectRosterRecord,
+): boolean {
+  return (
+    assignment.projectId === roster.projectId &&
+    assignment.personId === roster.personId &&
+    assignment.organisationId === roster.organisationId &&
+    assignment.companyId === roster.companyId &&
+    assignment.projectRole === roster.projectRole &&
+    assignment.status === roster.assignmentStatus &&
+    roster.membershipStatus === 'ACTIVE'
+  );
 }
 
 export function authorizeAttendance(request: AttendanceAuthorizationRequest): AttendanceAuthorizationResult {
