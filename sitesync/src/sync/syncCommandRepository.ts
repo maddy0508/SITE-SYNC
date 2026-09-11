@@ -129,8 +129,11 @@ export class SyncCommandRepository {
     await getDb().execute(
       `INSERT INTO conflict (conflict_id, command_id, entity_type, entity_id, local_revision, server_revision,
         local_payload, server_payload, status, reason_code, reason, resolved_at, resolved_by, resolution_strategy, created_at, updated_at)
-       SELECT ?, command_id, 'ATTENDANCE_STATE', json_object('projectId', project_id, 'personId', person_id, 'workDateUtc', substr(created_at,1,10)),
-        base_revision + 1, ?, command_payload_json, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
+       SELECT ?, command_id, 'ATTENDANCE_STATE',
+        json_object('projectId', project_id, 'personId', person_id,
+          'workDateUtc', (SELECT work_date_utc FROM attendance_event WHERE command_id=command_ledger.command_id LIMIT 1)),
+        COALESCE((SELECT current_revision FROM attendance_state WHERE last_command_id=command_ledger.command_id), base_revision + 1),
+        ?, command_payload_json, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
        FROM command_ledger WHERE command_id=?`,
       [conflictId, serverRevision, serverPayload, reasonCode, now, now, commandId],
     );
@@ -139,7 +142,8 @@ export class SyncCommandRepository {
       [serverRevision, now, commandId],
     );
     await getDb().execute(
-      `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=? AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)',
+      `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=?
+       AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)`,
       [serverRevision, now, command.projectId, command.personId, commandId],
     );
   }
