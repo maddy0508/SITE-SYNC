@@ -1,6 +1,7 @@
 import type { CommandLedgerRecord } from '../domain/localPersistence';
 import { STALE_PROCESSING_THRESHOLD_MS, canTransitionCommand } from '../domain/localPersistence';
-import { getDb, withTransaction, type Transaction } from '../database/localPersistence';
+import { getDb, withTransaction } from '../database/localPersistence';
+import type { Transaction } from '../database/sqliteAdapter';
 
 export interface ClaimedSyncCommand extends CommandLedgerRecord { commandPayloadJson: string; }
 type SqlFieldValue = string | number | null;
