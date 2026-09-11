@@ -1,0 +1,43 @@
+name: M1.6 verification
+
+on:
+  push:
+    branches:
+      - mckellarmaddy/mmm-34-m16-offline-attendance-and-durable-command-ledger
+    paths:
+      - 'sitesync/**'
+      - '.github/workflows/m16-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: sitesync
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+
+      - name: Require committed lockfile
+        run: test -s package-lock.json
+
+      - name: Install exact dependency graph
+        run: npm ci --ignore-scripts
+
+      - name: Run full Jest suite
+        run: npm test -- --runInBand
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npm run lint
