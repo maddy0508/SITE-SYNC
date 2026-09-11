@@ -15,7 +15,7 @@ describe('M1.6 schema migration', () => {
     await closeDatabase();
   });
 
-  test('migrates an existing v1 schema to v2 without losing command rows', async () => {
+  test('migrates an existing v1 schema to v2 without losing command rows and remains idempotent', async () => {
     const seedDb = await open({ name: MIGRATION_DATABASE_NAME });
     await seedDb.execute(`CREATE TABLE local_device_session (user_id TEXT PRIMARY KEY);`);
     await seedDb.execute(`CREATE TABLE project_context (person_id TEXT PRIMARY KEY);`);
@@ -89,5 +89,10 @@ describe('M1.6 schema migration', () => {
     const legacyRow = await getDb().execute('SELECT command_id, command_payload_json FROM command_ledger WHERE command_id = ?', ['legacy-command']);
     expect(legacyRow.rows.length).toBe(1);
     expect(legacyRow.rows.item(0)?.command_payload_json).toBe('{}');
+
+    await closeDatabase();
+    await initializeDatabase(MIGRATION_DATABASE_NAME);
+    const reopenedVersion = await getDb().execute('PRAGMA user_version;');
+    expect(reopenedVersion.rows.item(0)?.user_version).toBe(DATABASE_SCHEMA_VERSION);
   });
 });
