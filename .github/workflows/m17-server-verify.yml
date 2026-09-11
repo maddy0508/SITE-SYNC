@@ -95,6 +95,7 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260912000001_m17_sync_rpc_hardening.sql
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260912000002_m17_sync_rpc_conflict_target.sql
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260912000003_m17_sync_receipt_event_order.sql
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260912000004_m17_sync_security_hardening.sql
       - name: Run M1.7 SQL acceptance suite
         env:
           PGPASSWORD: postgres
