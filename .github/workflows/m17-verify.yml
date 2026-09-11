@@ -3,7 +3,7 @@ name: M1.7 sync foundation verification
 on:
   push:
     branches:
-      - mckellarmaddy/mmm-35-m17-sync-engine-foundation
+      - 'mckellarmaddy/mmm-35-m17-sync-engine-foundation*'
     paths:
       - 'sitesync/**'
       - '.github/workflows/m17-verify.yml'
