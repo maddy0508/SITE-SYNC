@@ -34,6 +34,7 @@ describe('M1.6 attendance command contract', () => {
       companyId: 'company-1',
       source: 'SELF',
       eventType: 'ATTENDANCE_CHECK_IN',
+      commandType: 'CHECK_IN',
       baseRevision: 0,
       clientOccurredAt: '2026-09-11T08:15:00.123Z',
       workDateUtc: '2026-09-11',
