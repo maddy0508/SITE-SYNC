@@ -9,5 +9,3 @@ The command ledger remains durable SQLite state. A command moves through `PENDIN
 Production transport is a later M1.7 slice after the local worker and reconciliation semantics pass controlled verification.
 
 CI verification is required before merge.
-
-Temporary Jest and compiler diagnostics are enabled for this verification run only.
