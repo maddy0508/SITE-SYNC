@@ -26,8 +26,12 @@ export interface SyncTransport {
   submit(request: SyncTransportRequest): Promise<SyncTransportResponse>;
 }
 
-export function parsePersistedAttendancePayload(command: CommandLedgerRecord): AttendanceCommand {
-  const parsed: unknown = JSON.parse(command.commandPayloadJson ?? '{}');
+export type PersistedCommandLedgerRecord = CommandLedgerRecord & {
+  commandPayloadJson: string;
+};
+
+export function parsePersistedAttendancePayload(command: PersistedCommandLedgerRecord): AttendanceCommand {
+  const parsed: unknown = JSON.parse(command.commandPayloadJson);
   if (!parsed || typeof parsed !== 'object' || (parsed as { commandId?: unknown }).commandId !== command.commandId) {
     throw new Error(`Invalid persisted payload for command ${command.commandId}`);
   }
