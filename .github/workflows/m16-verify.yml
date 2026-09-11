@@ -3,7 +3,12 @@ name: M1.6 verification
 on:
   push:
     branches:
-      - mckellarmaddy/mmm-34-m16-offline-attendance-and-durable-command-ledger
+      - mckellarmaddy/mmm-34-m16-offline-attendance-durable-command-ledger
+    paths:
+      - 'sitesync/**'
+      - '.github/workflows/m16-verify.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
     paths:
       - 'sitesync/**'
       - '.github/workflows/m16-verify.yml'
