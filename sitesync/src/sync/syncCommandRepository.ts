@@ -2,10 +2,7 @@ import type { CommandLedgerRecord } from '../domain/localPersistence';
 import { STALE_PROCESSING_THRESHOLD_MS, canTransitionCommand } from '../domain/localPersistence';
 import { getDb, withTransaction, type Transaction } from '../database/localPersistence';
 
-export interface ClaimedSyncCommand extends CommandLedgerRecord {
-  commandPayloadJson: string;
-}
-
+export interface ClaimedSyncCommand extends CommandLedgerRecord { commandPayloadJson: string; }
 type SqlFieldValue = string | number | null;
 
 function mapCommand(row: Record<string, unknown>): ClaimedSyncCommand {
@@ -84,10 +81,8 @@ export class SyncCommandRepository {
         serverRespondedAt: now, syncedAt: now, serverResultJson: JSON.stringify(result), serverErrorCode: null,
         failureDiagnostics: null, nextRetryAt: null, updatedAt: now,
       });
-      await tx.executeSql(
-        `UPDATE attendance_state SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE last_command_id=?`,
-        [serverRevision, now, commandId],
-      );
+      await tx.executeSql(`UPDATE attendance_state SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE last_command_id=?`,
+        [serverRevision, now, commandId]);
       await tx.executeSql(
         `UPDATE timesheet SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=?
          WHERE (project_id, person_id, work_date_utc) IN (
@@ -134,14 +129,12 @@ export class SyncCommandRepository {
           json_object('projectId', project_id, 'personId', person_id,
             'workDateUtc', (SELECT work_date_utc FROM attendance_event WHERE command_id=command_ledger.command_id LIMIT 1)),
           COALESCE((SELECT current_revision FROM attendance_state WHERE last_command_id=command_ledger.command_id), base_revision + 1),
-          ?, command_payload_json, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
+          ?, command_payload_json, ?, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
          FROM command_ledger WHERE command_id=?`,
-        [conflictId, serverRevision, reasonCode, now, now, commandId],
+        [conflictId, serverRevision, serverPayload, reasonCode, now, now, commandId],
       );
-      await tx.executeSql(
-        `UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`,
-        [serverRevision, now, commandId],
-      );
+      await tx.executeSql(`UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`,
+        [serverRevision, now, commandId]);
       await tx.executeSql(
         `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=?
          AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)
@@ -164,9 +157,7 @@ export class SyncCommandRepository {
     });
   }
 
-  private async transitionInTransaction(
-    tx: Transaction, current: ClaimedSyncCommand, to: CommandLedgerRecord['status'], fields: Record<string, SqlFieldValue>,
-  ): Promise<void> {
+  private async transitionInTransaction(tx: Transaction, current: ClaimedSyncCommand, to: CommandLedgerRecord['status'], fields: Record<string, SqlFieldValue>): Promise<void> {
     if (!canTransitionCommand(current.status, to)) throw new Error(`Invalid command transition ${current.status} -> ${to}`);
     const entries = Object.entries(fields);
     const setClause = entries.map(([key]) => `${key.replace(/[A-Z]/g, match => `_${match.toLowerCase()}`)}=?`).join(', ');
