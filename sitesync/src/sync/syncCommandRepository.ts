@@ -10,27 +10,17 @@ type SqlFieldValue = string | number | null;
 
 function mapCommand(row: Record<string, unknown>): ClaimedSyncCommand {
   return {
-    commandId: String(row.commandId),
-    projectId: String(row.projectId),
-    personId: String(row.personId),
-    organisationId: String(row.organisationId),
-    companyId: String(row.companyId),
-    commandType: String(row.commandType),
-    source: row.source as CommandLedgerRecord['source'],
-    baseRevision: Number(row.baseRevision),
-    status: row.status as CommandLedgerRecord['status'],
-    attemptCount: Number(row.attemptCount),
-    maxAttempts: Number(row.maxAttempts),
+    commandId: String(row.commandId), projectId: String(row.projectId), personId: String(row.personId),
+    organisationId: String(row.organisationId), companyId: String(row.companyId), commandType: String(row.commandType),
+    source: row.source as CommandLedgerRecord['source'], baseRevision: Number(row.baseRevision),
+    status: row.status as CommandLedgerRecord['status'], attemptCount: Number(row.attemptCount), maxAttempts: Number(row.maxAttempts),
     processingStartedAt: row.processingStartedAt == null ? null : String(row.processingStartedAt),
     serverRespondedAt: row.serverRespondedAt == null ? null : String(row.serverRespondedAt),
-    syncedAt: row.syncedAt == null ? null : String(row.syncedAt),
-    nextRetryAt: row.nextRetryAt == null ? null : String(row.nextRetryAt),
+    syncedAt: row.syncedAt == null ? null : String(row.syncedAt), nextRetryAt: row.nextRetryAt == null ? null : String(row.nextRetryAt),
     serverResultJson: row.serverResultJson == null ? null : String(row.serverResultJson),
     serverErrorCode: row.serverErrorCode == null ? null : String(row.serverErrorCode),
     failureDiagnostics: row.failureDiagnostics == null ? null : String(row.failureDiagnostics),
-    createdAt: String(row.createdAt),
-    updatedAt: String(row.updatedAt),
-    commandPayloadJson: String(row.commandPayloadJson ?? '{}'),
+    createdAt: String(row.createdAt), updatedAt: String(row.updatedAt), commandPayloadJson: String(row.commandPayloadJson ?? '{}'),
   };
 }
 
@@ -48,15 +38,13 @@ export class SyncCommandRepository {
     const cutoff = new Date(Date.parse(now) - STALE_PROCESSING_THRESHOLD_MS).toISOString();
     const result = await getDb().execute(
       `UPDATE command_ledger SET status='PENDING', processing_started_at=NULL, updated_at=?
-       WHERE status='PROCESSING' AND processing_started_at IS NOT NULL AND processing_started_at < ?
-         AND attempt_count < max_attempts`,
+       WHERE status='PROCESSING' AND processing_started_at IS NOT NULL AND processing_started_at < ? AND attempt_count < max_attempts`,
       [now, cutoff],
     );
     await getDb().execute(
       `UPDATE command_ledger SET status='FAILED', server_error_code='MAX_ATTEMPTS',
          failure_diagnostics='Processing claim became stale after max attempts', updated_at=?, processing_started_at=NULL
-       WHERE status='PROCESSING' AND processing_started_at IS NOT NULL AND processing_started_at < ?
-         AND attempt_count >= max_attempts`,
+       WHERE status='PROCESSING' AND processing_started_at IS NOT NULL AND processing_started_at < ? AND attempt_count >= max_attempts`,
       [now, cutoff],
     );
     return result.rowsAffected;
@@ -69,14 +57,11 @@ export class SyncCommandRepository {
           AND attempt_count < max_attempts
           AND NOT EXISTS (
             SELECT 1 FROM command_ledger earlier
-            WHERE earlier.project_id = command_ledger.project_id
-              AND earlier.person_id = command_ledger.person_id
+            WHERE earlier.project_id = command_ledger.project_id AND earlier.person_id = command_ledger.person_id
               AND earlier.status IN ('PENDING','PROCESSING','RETRYABLE_FAILURE')
               AND (earlier.created_at < command_ledger.created_at
                    OR (earlier.created_at = command_ledger.created_at AND earlier.command_id < command_ledger.command_id))
-          )
-          ORDER BY created_at ASC, command_id ASC LIMIT 1`,
-        [now],
+          ) ORDER BY created_at ASC, command_id ASC LIMIT 1`, [now],
       );
       if (result.rows.length === 0) return null;
       const candidate = result.rows.item(0) as unknown as Record<string, unknown>;
@@ -104,7 +89,8 @@ export class SyncCommandRepository {
         [serverRevision, now, commandId],
       );
       await tx.executeSql(
-        `UPDATE timesheet SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE (project_id, person_id, work_date_utc) IN (
+        `UPDATE timesheet SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=?
+         WHERE (project_id, person_id, work_date_utc) IN (
            SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
          ) AND source_state_revision=(SELECT base_revision + 1 FROM command_ledger WHERE command_id=?)`,
         [serverRevision, now, commandId, commandId],
@@ -124,9 +110,7 @@ export class SyncCommandRepository {
       await this.transitionInTransaction(tx, current, 'FAILED', {
         serverRespondedAt: now, serverErrorCode: code, failureDiagnostics: diagnostics, updatedAt: now,
       });
-      await tx.executeSql(
-        `UPDATE attendance_state SET sync_status='FAILED', updated_at=? WHERE last_command_id=?`, [now, commandId],
-      );
+      await tx.executeSql(`UPDATE attendance_state SET sync_status='FAILED', updated_at=? WHERE last_command_id=?`, [now, commandId]);
       await tx.executeSql(
         `UPDATE timesheet SET sync_status='FAILED', updated_at=? WHERE (project_id, person_id, work_date_utc) IN (
            SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
@@ -152,7 +136,7 @@ export class SyncCommandRepository {
           COALESCE((SELECT current_revision FROM attendance_state WHERE last_command_id=command_ledger.command_id), base_revision + 1),
           ?, command_payload_json, 'OPEN', ?, 'Server revision conflict', NULL, NULL, NULL, ?, ?
          FROM command_ledger WHERE command_id=?`,
-        [conflictId, serverPayload, reasonCode, serverRevision, now, now, commandId],
+        [conflictId, serverRevision, reasonCode, now, now, commandId],
       );
       await tx.executeSql(
         `UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`,
@@ -181,17 +165,12 @@ export class SyncCommandRepository {
   }
 
   private async transitionInTransaction(
-    tx: Transaction,
-    current: ClaimedSyncCommand,
-    to: CommandLedgerRecord['status'],
-    fields: Record<string, SqlFieldValue>,
+    tx: Transaction, current: ClaimedSyncCommand, to: CommandLedgerRecord['status'], fields: Record<string, SqlFieldValue>,
   ): Promise<void> {
     if (!canTransitionCommand(current.status, to)) throw new Error(`Invalid command transition ${current.status} -> ${to}`);
     const entries = Object.entries(fields);
     const setClause = entries.map(([key]) => `${key.replace(/[A-Z]/g, match => `_${match.toLowerCase()}`)}=?`).join(', ');
-    await tx.executeSql(
-      `UPDATE command_ledger SET status=?, ${setClause} WHERE command_id=?`,
-      [to, ...entries.map(([, value]) => value), current.commandId],
-    );
+    await tx.executeSql(`UPDATE command_ledger SET status=?, ${setClause} WHERE command_id=?`,
+      [to, ...entries.map(([, value]) => value), current.commandId]);
   }
 }
