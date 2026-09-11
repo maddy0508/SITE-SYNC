@@ -8,8 +8,7 @@ import type {
   TimesheetRecord,
 } from '../domain/localPersistence';
 import { M1_TIMESHEET_POLICY } from '../domain/localPersistence';
-import { getDb, withTransaction, validateUtcTimestamp } from '../database/localPersistence';
-import type { Transaction } from '../database/sqliteAdapter';
+import { withTransaction, validateUtcTimestamp } from '../database/localPersistence';
 import { authorizeAttendance } from './attendanceAuthorization';
 import { buildAttendanceCommand, type AttendanceCommand } from './attendanceCommands';
 
@@ -93,12 +92,6 @@ function deriveTimesheet(
   };
 }
 
-async function ensureCommandPayloadColumn(tx: Transaction): Promise<void> {
-  const columns = await tx.executeSql('PRAGMA table_info(command_ledger);');
-  if (columns.rows.some((row) => row.name === 'command_payload_json')) return;
-  await tx.executeSql("ALTER TABLE command_ledger ADD COLUMN command_payload_json TEXT NOT NULL DEFAULT '{}';");
-}
-
 function buildCommand(request: AttendanceMutationRequest, command: AttendanceCommand): CommandLedgerRecord {
   const now = command.clientOccurredAt;
   return {
@@ -110,7 +103,7 @@ function buildCommand(request: AttendanceMutationRequest, command: AttendanceCom
     commandType: command.commandType,
     source: command.source,
     baseRevision: command.baseRevision,
-    status: mutationSyncStatus(request.online) === 'OFFLINE_PENDING_VERIFICATION' ? 'PENDING' : 'PENDING',
+    status: 'PENDING',
     attemptCount: 0,
     maxAttempts: request.maxAttempts ?? 3,
     processingStartedAt: null,
@@ -217,7 +210,6 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
       createdAt: command.clientOccurredAt,
     };
 
-    await ensureCommandPayloadColumn(tx);
     await tx.executeSql(
       `INSERT INTO command_ledger (
         command_id, project_id, person_id, organisation_id, company_id, command_type, source,

@@ -253,7 +253,7 @@ async function createSchema(db: SQLiteDatabase): Promise<void> {
 async function migrateSchemaV1ToV2(db: SQLiteDatabase): Promise<void> {
   await db.transactionAsync(async (tx: Transaction) => {
     const columns = await tx.executeSql('PRAGMA table_info(command_ledger);');
-    const hasPayload = columns.rows.some((row) => row.name === 'command_payload_json');
+    const hasPayload = columns.rows.some((row: any) => row.name === 'command_payload_json');
     if (!hasPayload) {
       await tx.executeSql("ALTER TABLE command_ledger ADD COLUMN command_payload_json TEXT NOT NULL DEFAULT '{}';");
     }
