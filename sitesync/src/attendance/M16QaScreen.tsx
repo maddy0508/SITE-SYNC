@@ -5,54 +5,73 @@ import type { ProjectAssignment } from '../identity/identityService';
 import { AttendanceService } from './attendanceService';
 import { closeDatabase, getDb, initializeDatabase } from '../database/localPersistence';
 
-const ORG = 'org-m16';
-const COMPANY = 'company-m16';
-const PROJECT = 'project-m16';
-const PERSON = 'person-m16';
-const ASSIGNMENT = 'assignment-m16';
-
-const assignment: ProjectAssignment = {
-  id: ASSIGNMENT,
-  organisationId: ORG,
-  projectId: PROJECT,
-  companyId: COMPANY,
-  companyMembershipId: 'membership-m16',
-  personId: PERSON,
-  projectRole: 'WORKER',
-  status: 'ACTIVE',
-};
-
-const context: ApplicationContext = {
-  userId: 'user-m16',
-  profile: { userId: 'user-m16', organisationId: ORG, personId: PERSON },
-  person: { id: PERSON, organisationId: ORG, displayName: 'M1.6 TEST WORKER' },
-  organisation: { id: ORG, name: 'M1.6 TEST ORGANISATION' },
-  memberships: [],
-  activeProjectAssignments: [assignment],
-  hasProjectAccess: true,
-  device: null,
-};
-
 type Result = { name: string; passed: boolean; detail: string };
 
+function createFixture(runId: string): {
+  org: string;
+  company: string;
+  project: string;
+  person: string;
+  assignment: ProjectAssignment;
+  context: ApplicationContext;
+} {
+  const org = `org-m16-${runId}`;
+  const company = `company-m16-${runId}`;
+  const project = `project-m16-${runId}`;
+  const person = `person-m16-${runId}`;
+  const assignment: ProjectAssignment = {
+    id: `assignment-m16-${runId}`,
+    organisationId: org,
+    projectId: project,
+    companyId: company,
+    companyMembershipId: `membership-m16-${runId}`,
+    personId: person,
+    projectRole: 'WORKER',
+    status: 'ACTIVE',
+  };
+  const context: ApplicationContext = {
+    userId: `user-m16-${runId}`,
+    profile: { userId: `user-m16-${runId}`, organisationId: org, personId: person },
+    person: { id: person, organisationId: org, displayName: 'M1.6 TEST WORKER' },
+    organisation: { id: org, name: 'M1.6 TEST ORGANISATION' },
+    memberships: [],
+    activeProjectAssignments: [assignment],
+    hasProjectAccess: true,
+    device: null,
+  };
+  return { org, company, project, person, assignment, context };
+}
+
 async function runM16DeviceSuite(): Promise<Result[]> {
-  // Each run gets a fresh isolated database. This prevents a previous QA run's
-  // checked-out state from contaminating the fixed fixture timestamps below.
-  const testDatabase = `m16-device-qa-${Date.now().toString(36)}.db`;
+  // Database isolation is required, but the fixture identity is also unique so
+  // a native database-name reuse cannot contaminate a later QA run.
+  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const testDatabase = `m16-device-qa-${runId}.db`;
+  const fixture = createFixture(runId);
+  const workDateUtc = '2026-09-11';
+  const checkInAt = `${workDateUtc}T08:00:00.000Z`;
+  const rollbackAt = `${workDateUtc}T15:00:00.000Z`;
+  const checkOutAt = `${workDateUtc}T16:00:00.000Z`;
+  const commandIn = `m16-qa-${runId}-check-in`;
+  const eventIn = `m16-qa-${runId}-event-in`;
+  const commandRollback = `m16-qa-${runId}-rollback-command`;
+  const commandOut = `m16-qa-${runId}-check-out`;
+  const eventOut = `m16-qa-${runId}-event-out`;
+
   await closeDatabase();
   await initializeDatabase(testDatabase);
 
   const results: Result[] = [];
   const checkIn = await AttendanceService.checkIn({
-    context,
-    projectId: PROJECT,
-    targetPersonId: PERSON,
-    targetAssignment: assignment,
+    context: fixture.context,
+    projectId: fixture.project,
+    targetPersonId: fixture.person,
+    targetAssignment: fixture.assignment,
     source: 'SELF',
-    clientOccurredAt: '2026-09-11T08:00:00.000Z',
+    clientOccurredAt: checkInAt,
     online: false,
-    commandId: 'm16-qa-check-in',
-    eventId: 'm16-qa-event-in',
+    commandId: commandIn,
+    eventId: eventIn,
   });
   results.push({
     name: 'Offline check-in',
@@ -60,7 +79,7 @@ async function runM16DeviceSuite(): Promise<Result[]> {
     detail: `${checkIn.state.state} · ${checkIn.timesheet.syncStatus}`,
   });
 
-  const ledger = await getDb().execute('SELECT command_payload_json FROM command_ledger WHERE command_id = ?', ['m16-qa-check-in']);
+  const ledger = await getDb().execute('SELECT command_payload_json FROM command_ledger WHERE command_id = ?', [commandIn]);
   const payloadPresent = ledger.rows.length === 1 && typeof ledger.rows.item(0)?.command_payload_json === 'string';
   results.push({
     name: 'Durable command payload',
@@ -72,7 +91,7 @@ async function runM16DeviceSuite(): Promise<Result[]> {
   await initializeDatabase(testDatabase);
   const restartState = await getDb().execute(
     'SELECT state, current_revision FROM attendance_state WHERE project_id = ? AND person_id = ? AND work_date_utc = ?',
-    [PROJECT, PERSON, '2026-09-11'],
+    [fixture.project, fixture.person, workDateUtc],
   );
   const survived = restartState.rows.length === 1 && restartState.rows.item(0)?.state === 'CHECKED_IN' && restartState.rows.item(0)?.current_revision === 1;
   results.push({
@@ -83,19 +102,19 @@ async function runM16DeviceSuite(): Promise<Result[]> {
 
   try {
     await AttendanceService.checkOut({
-      context,
-      projectId: PROJECT,
-      targetPersonId: PERSON,
-      targetAssignment: assignment,
+      context: fixture.context,
+      projectId: fixture.project,
+      targetPersonId: fixture.person,
+      targetAssignment: fixture.assignment,
       source: 'SELF',
-      clientOccurredAt: '2026-09-11T15:00:00.000Z',
+      clientOccurredAt: rollbackAt,
       online: false,
-      commandId: 'm16-qa-rollback-command',
-      eventId: 'm16-qa-event-in',
+      commandId: commandRollback,
+      eventId: eventIn,
     });
     results.push({ name: 'Rollback on event failure', passed: false, detail: 'Unexpectedly accepted duplicate event ID' });
   } catch {
-    const rollbackCount = await getDb().execute('SELECT COUNT(*) AS count FROM command_ledger WHERE command_id = ?', ['m16-qa-rollback-command']);
+    const rollbackCount = await getDb().execute('SELECT COUNT(*) AS count FROM command_ledger WHERE command_id = ?', [commandRollback]);
     const rolledBack = rollbackCount.rows.item(0)?.count === 0;
     results.push({
       name: 'Rollback on event failure',
@@ -105,15 +124,15 @@ async function runM16DeviceSuite(): Promise<Result[]> {
   }
 
   const checkOut = await AttendanceService.checkOut({
-    context,
-    projectId: PROJECT,
-    targetPersonId: PERSON,
-    targetAssignment: assignment,
+    context: fixture.context,
+    projectId: fixture.project,
+    targetPersonId: fixture.person,
+    targetAssignment: fixture.assignment,
     source: 'SELF',
-    clientOccurredAt: '2026-09-11T16:00:00.000Z',
+    clientOccurredAt: checkOutAt,
     online: false,
-    commandId: 'm16-qa-check-out',
-    eventId: 'm16-qa-event-out',
+    commandId: commandOut,
+    eventId: eventOut,
   });
   results.push({
     name: 'Offline check-out',
@@ -153,7 +172,7 @@ export function M16QaScreen({ onBack }: { onBack: () => void }) {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>SELF-CONTAINED DEVICE SUITE</Text>
-        <Text style={styles.cardBody}>Uses an isolated local SQLite database. No production data or Supabase mutation is performed.</Text>
+        <Text style={styles.cardBody}>Uses an isolated local SQLite database and unique fixture identity per run. No production data or Supabase mutation is performed.</Text>
       </View>
 
       <Pressable style={styles.primary} disabled={running} onPress={run}>
