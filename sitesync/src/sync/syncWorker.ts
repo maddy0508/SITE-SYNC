@@ -14,8 +14,8 @@ export class SyncWorker {
   private started = false;
 
   constructor(
-    private readonly repository: SyncCommandRepository = new SyncCommandRepository(),
     private readonly transport: SyncTransport,
+    private readonly repository: SyncCommandRepository = new SyncCommandRepository(),
   ) {}
 
   start(): void {
@@ -46,8 +46,8 @@ export class SyncWorker {
       const command = await this.repository.claimNextEligible(now);
       if (!command) return { status: 'IDLE' };
       return await this.submitClaim(command, now);
-    } catch (error) {
-      return { status: 'ERROR', commandId: undefined };
+    } catch (_error) {
+      return { status: 'ERROR' };
     }
   }
 
