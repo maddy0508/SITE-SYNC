@@ -9,7 +9,3 @@ The command ledger remains durable SQLite state. A command moves through `PENDIN
 Production transport is a later M1.7 slice after the local worker and reconciliation semantics pass controlled verification.
 
 CI verification is required before merge.
-
-Diagnostic logging is temporary until the verification gate is green.
-
-TypeScript and ESLint diagnostics are now captured for the next verification run.
