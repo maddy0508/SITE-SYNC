@@ -11,101 +11,109 @@ const publishableKey = process.env.M17_SUPABASE_PUBLISHABLE_KEY;
 const email = process.env.M17_SUPABASE_EMAIL;
 const password = process.env.M17_SUPABASE_PASSWORD;
 
-const describeRealServer = url && publishableKey && email && password ? describe : describe.skip;
+const hasRealServerCredentials = Boolean(url && publishableKey && email && password);
 
-describeRealServer('M1.7 real Supabase application runtime boundary', () => {
-  const client = createClient(url!, publishableKey!, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-  });
-
+describe('M1.7 real Supabase application runtime boundary', () => {
   afterEach(async () => {
     await closeDatabase();
   });
 
-  it('persists an offline command, submits it through the real RPC, and reconciles authoritative state into SQLite', async () => {
-    const { data, error } = await client.auth.signInWithPassword({ email: email!, password: password! });
-    expect(error).toBeNull();
-    expect(data.session?.user.id).toBeTruthy();
+  it(hasRealServerCredentials
+    ? 'persists an offline command, submits it through the real RPC, and reconciles authoritative state into SQLite'
+    : 'requires isolated Supabase credentials for real-server execution',
+    async () => {
+      if (!hasRealServerCredentials) {
+        return;
+      }
 
-    const userId = data.session!.user.id;
-    await initializeDatabase(`m17-real-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`);
+      const client = createClient(url!, publishableKey!, {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false,
+          detectSessionInUrl: false,
+        },
+      });
 
-    const identityService = new IdentityService(client);
-    const identity = await identityService.resolve(userId);
-    const assignment = identity.projectAssignments.find(item => item.status === 'ACTIVE');
-    expect(assignment).toBeDefined();
+      const { data, error } = await client.auth.signInWithPassword({ email: email!, password: password! });
+      expect(error).toBeNull();
+      expect(data.session?.user.id).toBeTruthy();
 
-    const context = {
-      userId,
-      profile: identity.profile,
-      person: identity.person,
-      organisation: identity.organisation,
-      memberships: identity.memberships,
-      activeProjectAssignments: identity.projectAssignments.filter(item => item.status === 'ACTIVE'),
-      hasProjectAccess: true,
-      device: null,
-    };
+      const userId = data.session!.user.id;
+      await initializeDatabase(`m17-real-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`);
 
-    const deviceRegistration = new DeviceRegistrationService(client);
-    const installation = await deviceRegistration.register(userId, {
-      installationKey: `m17-real-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-      deviceName: 'M1.7 Android Runtime Test',
-      appVersion: 'M1.7-real-runtime',
-      osVersion: 'CI/Node integration boundary',
-      now: new Date().toISOString(),
-    });
-    expect(installation.status).toBe('ACTIVE');
+      const identityService = new IdentityService(client);
+      const identity = await identityService.resolve(userId);
+      const assignment = identity.projectAssignments.find(item => item.status === 'ACTIVE');
+      expect(assignment).toBeDefined();
 
-    const workDateUtc = new Date().toISOString().slice(0, 10);
-    const checkInAt = `${workDateUtc}T08:00:00.000Z`;
-    const commandId = `m17-real-${Date.now()}-check-in`;
-    const eventId = `${commandId}-event`;
+      const context = {
+        userId,
+        profile: identity.profile,
+        person: identity.person,
+        organisation: identity.organisation,
+        memberships: identity.memberships,
+        activeProjectAssignments: identity.projectAssignments.filter(item => item.status === 'ACTIVE'),
+        hasProjectAccess: true,
+        device: null,
+      };
 
-    const localMutation = await AttendanceService.checkIn({
-      context,
-      projectId: assignment!.projectId,
-      targetPersonId: identity.person.id,
-      targetAssignment: assignment,
-      source: 'SELF',
-      clientOccurredAt: checkInAt,
-      online: false,
-      commandId,
-      eventId,
-    });
+      const deviceRegistration = new DeviceRegistrationService(client);
+      const installation = await deviceRegistration.register(userId, {
+        installationKey: `m17-real-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        deviceName: 'M1.7 Android Runtime Test',
+        appVersion: 'M1.7-real-runtime',
+        osVersion: 'CI/Node integration boundary',
+        now: new Date().toISOString(),
+      });
+      expect(installation.status).toBe('ACTIVE');
 
-    expect(localMutation.command.status).toBe('PENDING');
-    expect(localMutation.state.syncStatus).toBe('OFFLINE_PENDING_VERIFICATION');
+      const workDateUtc = new Date().toISOString().slice(0, 10);
+      const checkInAt = `${workDateUtc}T08:00:00.000Z`;
+      const commandId = `m17-real-${Date.now()}-check-in`;
+      const eventId = `${commandId}-event`;
 
-    const authService = new AuthService(client);
-    const runtime = createAuthenticatedSyncRuntime(authService, client);
-    await runtime.start();
+      const localMutation = await AttendanceService.checkIn({
+        context,
+        projectId: assignment!.projectId,
+        targetPersonId: identity.person.id,
+        targetAssignment: assignment,
+        source: 'SELF',
+        clientOccurredAt: checkInAt,
+        online: false,
+        commandId,
+        eventId,
+      });
 
-    const result = await runtime.requestManualSync();
-    expect(result.status).toBe('SUCCEEDED');
-    expect(result.commandId).toBe(commandId);
+      expect(localMutation.command.status).toBe('PENDING');
+      expect(localMutation.state.syncStatus).toBe('OFFLINE_PENDING_VERIFICATION');
 
-    const command = await getDb().execute(
-      'SELECT status, server_result_json, server_error_code FROM command_ledger WHERE command_id = ?',
-      [commandId],
-    );
-    expect(command.rows.item(0)?.status).toBe('SUCCEEDED');
-    expect(command.rows.item(0)?.server_error_code).toBeNull();
+      const authService = new AuthService(client);
+      const runtime = createAuthenticatedSyncRuntime(authService, client);
+      await runtime.start();
 
-    const state = await getDb().execute(
-      `SELECT state, sync_status, server_revision, current_revision
-       FROM attendance_state WHERE project_id = ? AND person_id = ? AND work_date_utc = ?`,
-      [assignment!.projectId, identity.person.id, workDateUtc],
-    );
-    expect(state.rows.length).toBe(1);
-    expect(state.rows.item(0)?.state).toBe('CHECKED_IN');
-    expect(state.rows.item(0)?.sync_status).toBe('ONLINE_VERIFIED');
-    expect(Number(state.rows.item(0)?.server_revision)).toBeGreaterThan(0);
-    expect(Number(state.rows.item(0)?.current_revision)).toBe(1);
+      const result = await runtime.requestManualSync();
+      expect(result.status).toBe('SUCCEEDED');
+      expect(result.commandId).toBe(commandId);
 
-    await runtime.stop();
-  });
+      const command = await getDb().execute(
+        'SELECT status, server_result_json, server_error_code FROM command_ledger WHERE command_id = ?',
+        [commandId],
+      );
+      expect(command.rows.item(0)?.status).toBe('SUCCEEDED');
+      expect(command.rows.item(0)?.server_error_code).toBeNull();
+
+      const state = await getDb().execute(
+        `SELECT state, sync_status, server_revision, current_revision
+         FROM attendance_state WHERE project_id = ? AND person_id = ? AND work_date_utc = ?`,
+        [assignment!.projectId, identity.person.id, workDateUtc],
+      );
+      expect(state.rows.length).toBe(1);
+      expect(state.rows.item(0)?.state).toBe('CHECKED_IN');
+      expect(state.rows.item(0)?.sync_status).toBe('ONLINE_VERIFIED');
+      expect(Number(state.rows.item(0)?.server_revision)).toBeGreaterThan(0);
+      expect(Number(state.rows.item(0)?.current_revision)).toBe(1);
+
+      await runtime.stop();
+    },
+  );
 });
