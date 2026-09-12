@@ -23,8 +23,8 @@ INSERT INTO public.company_memberships (id, organisation_id, company_id, person_
 INSERT INTO public.projects (id, organisation_id, name) VALUES
  ('caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Project') ON CONFLICT DO NOTHING;
 INSERT INTO public.project_company_participation (organisation_id, project_id, company_id, status) VALUES
- ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000001','ACTIVE'),
- ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000002','ACTIVE') ON CONFLICT DO NOTHING;
+ ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-000000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000001','ACTIVE'),
+ ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-000000000002','caaaaaaa-aaaa-aaaa-aaaa-000000000002','ACTIVE') ON CONFLICT DO NOTHING;
 INSERT INTO public.project_assignments (id, organisation_id, project_id, company_id, company_membership_id, person_id, project_role, status) VALUES
  ('caaaaaaa-aaaa-aaaa-aaaa-400000000001','caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000001','caaaaaaa-aaaa-aaaa-aaaa-200000000001','caaaaaaa-aaaa-aaaa-aaaa-100000000001','SUPERVISOR','ACTIVE'),
  ('caaaaaaa-aaaa-aaaa-aaaa-400000000002','caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000002','caaaaaaa-aaaa-aaaa-aaaa-200000000002','caaaaaaa-aaaa-aaaa-aaaa-100000000002','WORKER','ACTIVE') ON CONFLICT DO NOTHING;
@@ -75,12 +75,16 @@ SELECT (sync_attendance_command(
  'caaaaaaa-aaaa-aaaa-aaaa-600000000008','caaaaaaa-aaaa-aaaa-aaaa-500000000001','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-100000000001',DATE '2026-09-14',1,'CHECK_OUT',
  '{"commandId":"caaaaaaa-aaaa-aaaa-aaaa-600000000008","eventId":"caaaaaaa-aaaa-aaaa-aaaa-700000000008","projectId":"caaaaaaa-aaaa-aaaa-aaaa-300000000001","personId":"caaaaaaa-aaaa-aaaa-aaaa-100000000001","workDateUtc":"2026-09-14","commandType":"CHECK_OUT","projectAssignmentId":"caaaaaaa-aaaa-aaaa-aaaa-400000000001","clientOccurredAt":"2026-09-14T09:00:00Z","source":"SELF"}'::jsonb)->>'code') = 'INVALID_CHRONOLOGY' AS predated_checkout_rejected;
 
+-- Revocation is monotonic. First verify the authenticated API cannot bypass RLS,
+-- then verify the database trigger itself at the owner level.
 RESET ROLE;
-
--- Revocation is monotonic even for the device owner.
 UPDATE public.device_installations SET status='REVOKED', revoked_at=NOW() WHERE id='caaaaaaa-aaaa-aaaa-aaaa-500000000001';
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claim.sub = '31111111-1111-1111-1111-111111111111';
+SELECT count(*) = 0 AS revoked_update_blocked_by_rls
+FROM public.device_installations
+WHERE id='caaaaaaa-aaaa-aaaa-aaaa-500000000001' AND status='ACTIVE';
+RESET ROLE;
 DO $$
 BEGIN
   BEGIN
@@ -90,6 +94,5 @@ BEGIN
     IF SQLERRM NOT LIKE '%cannot be reactivated%' THEN RAISE; END IF;
   END;
 END $$;
-RESET ROLE;
 
 ROLLBACK;
