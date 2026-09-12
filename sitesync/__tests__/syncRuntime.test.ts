@@ -13,7 +13,11 @@ function worker(): Worker {
 describe('SyncRuntime', () => {
   it('starts exactly once and stops the worker on shutdown', async () => {
     const w = worker();
-    const runtime = new SyncRuntime({ createWorker: jest.fn(async () => w) });
+    const runtime = new SyncRuntime({
+      getAuthenticatedUserId: jest.fn(async () => 'user-1'),
+      getDeviceSession: jest.fn(async () => ({ status: 'ACTIVE', deviceInstallationId: 'device-1' })),
+      createWorker: jest.fn(async () => w),
+    });
 
     await runtime.start();
     await runtime.start();
@@ -73,7 +77,11 @@ describe('SyncRuntime', () => {
 
   it('forwards manual sync requests to the live worker and remains safe before start', async () => {
     const w = worker();
-    const runtime = new SyncRuntime({ createWorker: jest.fn(async () => w) });
+    const runtime = new SyncRuntime({
+      getAuthenticatedUserId: jest.fn(async () => 'user-1'),
+      getDeviceSession: jest.fn(async () => ({ status: 'ACTIVE', deviceInstallationId: 'device-1' })),
+      createWorker: jest.fn(async () => w),
+    });
 
     expect(await runtime.requestManualSync()).toEqual({ status: 'IDLE' });
     expect(w.requestSync).not.toHaveBeenCalled();
