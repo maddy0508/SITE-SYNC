@@ -12,7 +12,8 @@ import { SyncLifecycle as DefaultSyncLifecycle } from './src/sync/syncLifecycle'
 import type { SyncRuntime } from './src/sync/syncRuntime';
 import { AuthService } from './src/auth/authService';
 import { createAuthenticatedSyncRuntime } from './src/sync/syncRuntime';
-import { createM17SupabaseClient } from './src/supabase/m17SupabaseClient';
+import { createM17NetworkStateSource } from './src/sync/m17NetworkState';
+import { createM17SupabaseClient, M17_SUPABASE_URL } from './src/supabase/m17SupabaseClient';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -27,65 +28,29 @@ const applicationContext: ApplicationContext = {
   profile: { userId: USER_ID, organisationId: ORG_ID, personId: PERSON_ID },
   person: { id: PERSON_ID, organisationId: ORG_ID, displayName: 'ORG A WORKER' },
   organisation: { id: ORG_ID, name: 'Organisation A' },
-  memberships: [{
-    id: MEMBERSHIP_ID,
-    organisationId: ORG_ID,
-    companyId: COMPANY_ID,
-    personId: PERSON_ID,
-    status: 'ACTIVE',
-  }],
-  activeProjectAssignments: [{
-    id: 'assignment-1',
-    organisationId: ORG_ID,
-    projectId: PROJECT_ID,
-    companyId: COMPANY_ID,
-    companyMembershipId: MEMBERSHIP_ID,
-    personId: PERSON_ID,
-    projectRole: 'WORKER',
-    status: 'ACTIVE',
-  }],
+  memberships: [{ id: MEMBERSHIP_ID, organisationId: ORG_ID, companyId: COMPANY_ID, personId: PERSON_ID, status: 'ACTIVE' }],
+  activeProjectAssignments: [{ id: 'assignment-1', organisationId: ORG_ID, projectId: PROJECT_ID, companyId: COMPANY_ID, companyMembershipId: MEMBERSHIP_ID, personId: PERSON_ID, projectRole: 'WORKER', status: 'ACTIVE' }],
   hasProjectAccess: true,
   device: null,
 };
 
 const scannerContext: ProjectContextRecord = {
-  personId: PERSON_ID,
-  projectId: PROJECT_ID,
-  organisationId: ORG_ID,
-  companyId: COMPANY_ID,
-  companyMembershipId: MEMBERSHIP_ID,
-  projectRole: 'WORKER',
-  selectedAt: '2026-09-11T00:00:00.000Z',
-  updatedAt: '2026-09-11T00:00:00.000Z',
+  personId: PERSON_ID, projectId: PROJECT_ID, organisationId: ORG_ID, companyId: COMPANY_ID, companyMembershipId: MEMBERSHIP_ID,
+  projectRole: 'WORKER', selectedAt: '2026-09-11T00:00:00.000Z', updatedAt: '2026-09-11T00:00:00.000Z',
 };
 
 const rosterRecord: ProjectRosterRecord = {
-  projectId: PROJECT_ID,
-  personId: PERSON_ID,
-  organisationId: ORG_ID,
-  companyId: COMPANY_ID,
-  displayName: 'ORG A WORKER',
-  projectRole: 'WORKER',
-  assignmentStatus: 'ACTIVE',
-  membershipStatus: 'ACTIVE',
-  syncedAt: '2026-09-11T00:00:00.000Z',
+  projectId: PROJECT_ID, personId: PERSON_ID, organisationId: ORG_ID, companyId: COMPANY_ID, displayName: 'ORG A WORKER',
+  projectRole: 'WORKER', assignmentStatus: 'ACTIVE', membershipStatus: 'ACTIVE', syncedAt: '2026-09-11T00:00:00.000Z',
 };
 
 const membershipRecord: TrustedMembershipRecord = {
-  id: MEMBERSHIP_ID,
-  organisationId: ORG_ID,
-  companyId: COMPANY_ID,
-  personId: PERSON_ID,
-  status: 'ACTIVE',
+  id: MEMBERSHIP_ID, organisationId: ORG_ID, companyId: COMPANY_ID, personId: PERSON_ID, status: 'ACTIVE',
 };
 
 const qaResolver: QrRosterResolver = {
-  async getRoster(projectId, personId) {
-    return projectId === PROJECT_ID && personId === PERSON_ID ? rosterRecord : null;
-  },
-  async getMembership(membershipId) {
-    return membershipId === MEMBERSHIP_ID ? membershipRecord : null;
-  },
+  async getRoster(projectId, personId) { return projectId === PROJECT_ID && personId === PERSON_ID ? rosterRecord : null; },
+  async getMembership(membershipId) { return membershipId === MEMBERSHIP_ID ? membershipRecord : null; },
 };
 
 type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa' | 'm17qa';
@@ -97,16 +62,9 @@ type M17QaScreenComponent = React.ComponentType<{
   runtime: Pick<SyncRuntime, 'start' | 'stop' | 'requestManualSync'>;
 }>;
 
-export interface AppProps {
-  syncLifecycle?: Pick<SyncLifecycle, 'start' | 'dispose'>;
-}
+export interface AppProps { syncLifecycle?: Pick<SyncLifecycle, 'start' | 'dispose'>; }
 
-interface M17Composition {
-  client: SupabaseClient;
-  authService: AuthService;
-  runtime: SyncRuntime;
-  lifecycle: DefaultSyncLifecycle;
-}
+interface M17Composition { client: SupabaseClient; authService: AuthService; runtime: SyncRuntime; lifecycle: DefaultSyncLifecycle; }
 
 export default function App({ syncLifecycle }: AppProps = {}) {
   const [screen, setScreen] = useState<Screen>('home');
@@ -135,7 +93,8 @@ export default function App({ syncLifecycle }: AppProps = {}) {
         const client = createM17SupabaseClient();
         const authService = new AuthService(client);
         const runtime = createAuthenticatedSyncRuntime(authService, client);
-        const lifecycle = new DefaultSyncLifecycle(runtime, AppState, undefined, authService);
+        const network = createM17NetworkStateSource(M17_SUPABASE_URL);
+        const lifecycle = new DefaultSyncLifecycle(runtime, AppState, network, authService);
         composition = { client, authService, runtime, lifecycle };
         setM17(composition);
       }
@@ -152,107 +111,33 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     }
   };
 
-  if (screen === 'workerQr') {
-    return (
-      <SafeAreaView style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
-        <View style={styles.header}>
-          <Pressable onPress={() => setScreen('home')} hitSlop={12}>
-            <Text style={styles.back}>‹ BACK</Text>
-          </Pressable>
-          <Text style={styles.headerLabel}>M1.5 TEST</Text>
-        </View>
-        <WorkerQrIdentityScreen context={applicationContext} projectId={PROJECT_ID} projectName="TEST PROJECT" />
-      </SafeAreaView>
-    );
-  }
-
-  if (screen === 'scanner') {
-    return (
-      <SafeAreaView style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
-        <View style={styles.scannerHeader}>
-          <Pressable onPress={() => setScreen('home')} hitSlop={12}>
-            <Text style={styles.back}>‹ BACK</Text>
-          </Pressable>
-        </View>
-        <QrScannerScreen context={scannerContext} resolver={qaResolver} online />
-      </SafeAreaView>
-    );
-  }
-
-  if (screen === 'qa') {
-    return (
-      <SafeAreaView style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
-        <M15QaScreen onBack={() => setScreen('home')} />
-      </SafeAreaView>
-    );
-  }
-
-  if (screen === 'm16qa') {
-    return (
-      <SafeAreaView style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
-        <M16QaScreen onBack={() => setScreen('home')} />
-      </SafeAreaView>
-    );
-  }
+  if (screen === 'workerQr') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><View style={styles.header}><Pressable onPress={() => setScreen('home')} hitSlop={12}><Text style={styles.back}>‹ BACK</Text></Pressable><Text style={styles.headerLabel}>M1.5 TEST</Text></View><WorkerQrIdentityScreen context={applicationContext} projectId={PROJECT_ID} projectName="TEST PROJECT" /></SafeAreaView>;
+  if (screen === 'scanner') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><View style={styles.scannerHeader}><Pressable onPress={() => setScreen('home')} hitSlop={12}><Text style={styles.back}>‹ BACK</Text></Pressable></View><QrScannerScreen context={scannerContext} resolver={qaResolver} online /></SafeAreaView>;
+  if (screen === 'qa') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M15QaScreen onBack={() => setScreen('home')} /></SafeAreaView>;
+  if (screen === 'm16qa') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M16QaScreen onBack={() => setScreen('home')} /></SafeAreaView>;
 
   if (screen === 'm17qa') {
     if (!m17 || !m17QaScreen) return null;
     const M17RealRuntimeQaScreen = m17QaScreen;
-    return (
-      <SafeAreaView style={styles.root}>
-        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
-        <M17RealRuntimeQaScreen
-          onBack={() => setScreen('home')}
-          authService={m17.authService}
-          client={m17.client}
-          runtime={m17.runtime}
-        />
-      </SafeAreaView>
-    );
+    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17RealRuntimeQaScreen onBack={() => setScreen('home')} authService={m17.authService} client={m17.client} runtime={m17.runtime} /></SafeAreaView>;
   }
 
-  return (
-    <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
-      <View style={styles.home}>
-        <Text style={styles.eyebrow}>SITE-SYNC</Text>
-        <Text style={styles.title}>M1.6 ATTENDANCE TEST</Text>
-        <Text style={styles.subtitle}>Standalone device verification</Text>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>OFFLINE ATTENDANCE</Text>
-          <Text style={styles.cardBody}>M1.6 exercises local check-in/check-out, durable command history, restart persistence and transactional rollback without touching production Supabase.</Text>
-        </View>
-
-        <Pressable style={styles.primary} disabled={m17Loading} onPress={() => void openM17Qa()}>
-          <Text style={styles.primaryText}>{m17Loading ? 'LOADING M1.7 QA…' : 'RUN M1.7 REAL RUNTIME QA'}</Text>
-        </Pressable>
-        {m17LoadError && <Text style={styles.error}>M1.7 QA could not be loaded: {m17LoadError}</Text>}
-        <Pressable style={styles.primary} onPress={() => setScreen('m16qa')}>
-          <Text style={styles.primaryText}>RUN M1.6 DEVICE SUITE</Text>
-        </Pressable>
-        <Pressable style={styles.secondary} onPress={() => setScreen('qa')}>
-          <Text style={styles.secondaryText}>RUN M1.5 QR SUITE</Text>
-        </Pressable>
-        <Pressable style={styles.secondary} onPress={() => setScreen('scanner')}>
-          <Text style={styles.secondaryText}>SCAN WORKER QR</Text>
-        </Pressable>
-        <Pressable style={styles.qaButton} onPress={() => setScreen('workerQr')}>
-          <Text style={styles.qaButtonText}>SHOW WORKER QR</Text>
-        </Pressable>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerTitle}>TEST CONTEXT</Text>
-          <Text style={styles.footerText}>M1.7 uses isolated Supabase + local SQLite</Text>
-          <Text style={styles.footerText}>Production Supabase remains untouched.</Text>
-        </View>
-      </View>
-    </SafeAreaView>
-  );
+  return <SafeAreaView style={styles.root}>
+    <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
+    <View style={styles.home}>
+      <Text style={styles.eyebrow}>SITE-SYNC</Text>
+      <Text style={styles.title}>M1.6 ATTENDANCE TEST</Text>
+      <Text style={styles.subtitle}>Standalone device verification</Text>
+      <View style={styles.card}><Text style={styles.cardTitle}>OFFLINE ATTENDANCE</Text><Text style={styles.cardBody}>M1.6 exercises local check-in/check-out, durable command history, restart persistence and transactional rollback without touching production Supabase.</Text></View>
+      <Pressable style={styles.primary} disabled={m17Loading} onPress={() => void openM17Qa()}><Text style={styles.primaryText}>{m17Loading ? 'LOADING M1.7 QA…' : 'RUN M1.7 REAL RUNTIME QA'}</Text></Pressable>
+      {m17LoadError && <Text style={styles.error}>M1.7 QA could not be loaded: {m17LoadError}</Text>}
+      <Pressable style={styles.primary} onPress={() => setScreen('m16qa')}><Text style={styles.primaryText}>RUN M1.6 DEVICE SUITE</Text></Pressable>
+      <Pressable style={styles.secondary} onPress={() => setScreen('qa')}><Text style={styles.secondaryText}>RUN M1.5 QR SUITE</Text></Pressable>
+      <Pressable style={styles.secondary} onPress={() => setScreen('scanner')}><Text style={styles.secondaryText}>SCAN WORKER QR</Text></Pressable>
+      <Pressable style={styles.qaButton} onPress={() => setScreen('workerQr')}><Text style={styles.qaButtonText}>SHOW WORKER QR</Text></Pressable>
+      <View style={styles.footer}><Text style={styles.footerTitle}>TEST CONTEXT</Text><Text style={styles.footerText}>M1.7 uses isolated Supabase + local SQLite</Text><Text style={styles.footerText}>Production Supabase remains untouched.</Text></View>
+    </View>
+  </SafeAreaView>;
 }
 
 const styles = StyleSheet.create({
