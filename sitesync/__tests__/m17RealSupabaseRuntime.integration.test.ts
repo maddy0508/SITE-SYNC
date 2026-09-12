@@ -6,10 +6,11 @@ import { DeviceRegistrationService } from '../src/identity/deviceRegistrationSer
 import { IdentityService } from '../src/identity/identityService';
 import { createAuthenticatedSyncRuntime } from '../src/sync/syncRuntime';
 
-const url = process.env.M17_SUPABASE_URL;
-const publishableKey = process.env.M17_SUPABASE_PUBLISHABLE_KEY;
-const email = process.env.M17_SUPABASE_EMAIL;
-const password = process.env.M17_SUPABASE_PASSWORD;
+const env = (globalThis as unknown as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+const url = env.M17_SUPABASE_URL;
+const publishableKey = env.M17_SUPABASE_PUBLISHABLE_KEY;
+const email = env.M17_SUPABASE_EMAIL;
+const password = env.M17_SUPABASE_PASSWORD;
 
 const hasRealServerCredentials = Boolean(url && publishableKey && email && password);
 
