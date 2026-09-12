@@ -40,10 +40,10 @@ jobs:
         run: npm test -- --runInBand
       - name: TypeScript check
         working-directory: sitesync
-        run: npm run typecheck --if-present
+        run: npx tsc --noEmit
       - name: ESLint
         working-directory: sitesync
-        run: npm run lint --if-present
+        run: npx eslint .
       - name: Assemble physical M1.7 QA APK
         working-directory: sitesync/android
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
