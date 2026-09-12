@@ -62,4 +62,16 @@ describe('AuthService', () => {
     await new AuthService(client as never).signOut();
     expect(client.auth.signOut).toHaveBeenCalledTimes(1);
   });
+
+  it('exposes user identity changes without exposing auth internals to the runtime', () => {
+    const unsubscribe = jest.fn();
+    const onAuthStateChange = jest.fn((_callback: (userId: string | null) => void) => ({ data: { subscription: { unsubscribe } } }));
+    const service = new AuthService({ auth: { onAuthStateChange } } as never);
+
+    const remove = service.subscribeUser((userId) => userId);
+
+    expect(onAuthStateChange).toHaveBeenCalledTimes(1);
+    remove();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
 });

@@ -28,3 +28,23 @@ test('renders correctly', async () => {
     ReactTestRenderer.create(<App />);
   });
 });
+
+test('starts and disposes the supplied sync lifecycle with the app', async () => {
+  const lifecycle = {
+    start: jest.fn(async () => undefined),
+    dispose: jest.fn(async () => undefined),
+  };
+
+  let renderer: ReactTestRenderer.ReactTestRenderer;
+  await ReactTestRenderer.act(() => {
+    renderer = ReactTestRenderer.create(<App syncLifecycle={lifecycle} />);
+  });
+
+  expect(lifecycle.start).toHaveBeenCalledTimes(1);
+
+  await ReactTestRenderer.act(() => {
+    renderer!.unmount();
+  });
+
+  expect(lifecycle.dispose).toHaveBeenCalledTimes(1);
+});
