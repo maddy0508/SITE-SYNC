@@ -34,15 +34,16 @@ INSERT INTO public.device_installations (id, user_id, installation_key, status) 
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claim.sub = '31111111-1111-1111-1111-111111111111';
 
--- SELF cannot target another person, even when the caller is a supervisor.
+-- SELF cannot target another company/person aggregate; the hardened authorization
+-- boundary rejects the request before target-specific mutation logic is reached.
 SELECT (sync_attendance_command(
  'caaaaaaa-aaaa-aaaa-aaaa-600000000001','caaaaaaa-aaaa-aaaa-aaaa-500000000001','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-100000000002',DATE '2026-09-14',0,'CHECK_IN',
- '{"commandId":"caaaaaaa-aaaa-aaaa-aaaa-600000000001","eventId":"caaaaaaa-aaaa-aaaa-aaaa-700000000001","projectId":"caaaaaaa-aaaa-aaaa-aaaa-300000000001","personId":"caaaaaaa-aaaa-aaaa-aaaa-100000000002","workDateUtc":"2026-09-14","commandType":"CHECK_IN","projectAssignmentId":"caaaaaaa-aaaa-aaaa-aaaa-400000000002","clientOccurredAt":"2026-09-14T09:00:00Z","source":"SELF"}'::jsonb)->>'code') = 'SELF_TARGET_MISMATCH' AS self_target_blocked;
+ '{"commandId":"caaaaaaa-aaaa-aaaa-aaaa-600000000001","eventId":"caaaaaaa-aaaa-aaaa-aaaa-700000000001","projectId":"caaaaaaa-aaaa-aaaa-aaaa-300000000001","personId":"caaaaaaa-aaaa-aaaa-aaaa-100000000002","workDateUtc":"2026-09-14","commandType":"CHECK_IN","projectAssignmentId":"caaaaaaa-aaaa-aaaa-aaaa-400000000002","clientOccurredAt":"2026-09-14T09:00:00Z","source":"SELF"}'::jsonb)->>'code') = 'NOT_AUTHORIZED' AS self_target_blocked;
 
--- QR requires supervisor/admin, and cross-company targeting is forbidden.
+-- QR cross-company targeting is forbidden by the same relational authorization boundary.
 SELECT (sync_attendance_command(
  'caaaaaaa-aaaa-aaaa-aaaa-600000000002','caaaaaaa-aaaa-aaaa-aaaa-500000000001','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-100000000002',DATE '2026-09-14',0,'CHECK_IN',
- '{"commandId":"caaaaaaa-aaaa-aaaa-aaaa-600000000002","eventId":"caaaaaaa-aaaa-aaaa-aaaa-700000000002","projectId":"caaaaaaa-aaaa-aaaa-aaaa-300000000001","personId":"caaaaaaa-aaaa-aaaa-aaaa-100000000002","workDateUtc":"2026-09-14","commandType":"CHECK_IN","projectAssignmentId":"caaaaaaa-aaaa-aaaa-aaaa-400000000002","clientOccurredAt":"2026-09-14T09:00:00Z","source":"QR"}'::jsonb)->>'code') = 'TARGET_COMPANY_MISMATCH' AS cross_company_blocked;
+ '{"commandId":"caaaaaaa-aaaa-aaaa-aaaa-600000000002","eventId":"caaaaaaa-aaaa-aaaa-aaaa-700000000002","projectId":"caaaaaaa-aaaa-aaaa-aaaa-300000000001","personId":"caaaaaaa-aaaa-aaaa-aaaa-100000000002","workDateUtc":"2026-09-14","commandType":"CHECK_IN","projectAssignmentId":"caaaaaaa-aaaa-aaaa-aaaa-400000000002","clientOccurredAt":"2026-09-14T09:00:00Z","source":"QR"}'::jsonb)->>'code') = 'NOT_AUTHORIZED' AS cross_company_blocked;
 
 -- A malformed assignment must be a permanent validation result, not a raw UUID exception.
 SELECT (sync_attendance_command(
@@ -61,7 +62,10 @@ SELECT (sync_attendance_command(
 SELECT (sync_attendance_command(
  'caaaaaaa-aaaa-aaaa-aaaa-600000000006','caaaaaaa-aaaa-aaaa-aaaa-500000000001','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-100000000001',DATE '2026-09-14',0,'CHECK_OUT',
  '{"commandId":"caaaaaaa-aaaa-aaaa-aaaa-600000000006","eventId":"caaaaaaa-aaaa-aaaa-aaaa-700000000006","projectId":"caaaaaaa-aaaa-aaaa-aaaa-300000000001","personId":"caaaaaaa-aaaa-aaaa-aaaa-100000000001","workDateUtc":"2026-09-14","commandType":"CHECK_OUT","projectAssignmentId":"caaaaaaa-aaaa-aaaa-aaaa-400000000001","clientOccurredAt":"2026-09-14T09:00:00Z","source":"SELF"}'::jsonb)->>'code') = 'INVALID_STATE_TRANSITION' AS initial_checkout_rejected;
+RESET ROLE;
 SELECT count(*) = 0 AS rejected_checkout_did_not_create_aggregate FROM public.sitesync_attendance_day WHERE project_id='caaaaaaa-aaaa-aaaa-aaaa-300000000001' AND person_id='caaaaaaa-aaaa-aaaa-aaaa-100000000001' AND work_date_utc='2026-09-14';
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '31111111-1111-1111-1111-111111111111';
 
 -- Create a valid check-in, then reject a predated check-out.
 SELECT (sync_attendance_command(
