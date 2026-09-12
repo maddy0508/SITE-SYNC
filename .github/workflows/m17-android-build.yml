@@ -49,11 +49,13 @@ jobs:
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
       - name: Write APK provenance manifest
         working-directory: sitesync
+        env:
+          M17_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           mkdir -p android/app/build/outputs/apk/release
           cat > android/app/build/outputs/apk/release/SITE-SYNC-M1.7-QA-PROVENANCE.txt <<EOF
-          branch=${GITHUB_REF_NAME}
-          commit=${GITHUB_SHA}
+          branch=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}
+          commit=${M17_SOURCE_COMMIT}
           workflow=${GITHUB_WORKFLOW}
           run=${GITHUB_RUN_ID}
           isolated_project=fuaiodkyaqfandbenuol
