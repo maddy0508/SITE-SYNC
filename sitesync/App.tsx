@@ -4,7 +4,6 @@ import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
 import { M15QaScreen } from './src/qr/M15QaScreen';
 import { M16QaScreen } from './src/attendance/M16QaScreen';
-import { M17RealRuntimeQaScreen } from './src/attendance/M17RealRuntimeQaScreen';
 import { QrScannerScreen } from './src/qr/QrScannerScreen';
 import { WorkerQrIdentityScreen } from './src/qr/WorkerQrIdentityScreen';
 import type { QrRosterResolver, TrustedMembershipRecord } from './src/qr/qrValidation';
@@ -91,6 +90,13 @@ const qaResolver: QrRosterResolver = {
 
 type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa' | 'm17qa';
 
+type M17QaScreenComponent = React.ComponentType<{
+  onBack: () => void;
+  authService: AuthService;
+  client: SupabaseClient;
+  runtime: Pick<SyncRuntime, 'start' | 'stop' | 'requestManualSync'>;
+}>;
+
 export interface AppProps {
   syncLifecycle?: Pick<SyncLifecycle, 'start' | 'dispose'>;
 }
@@ -105,6 +111,9 @@ interface M17Composition {
 export default function App({ syncLifecycle }: AppProps = {}) {
   const [screen, setScreen] = useState<Screen>('home');
   const [m17, setM17] = useState<M17Composition | null>(null);
+  const [m17QaScreen, setM17QaScreen] = useState<M17QaScreenComponent | null>(null);
+  const [m17Loading, setM17Loading] = useState(false);
+  const [m17LoadError, setM17LoadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!syncLifecycle) return undefined;
@@ -117,15 +126,30 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     return () => { void m17.lifecycle.dispose(); };
   }, [m17, screen]);
 
-  const openM17Qa = () => {
-    if (!m17) {
-      const client = createM17SupabaseClient();
-      const authService = new AuthService(client);
-      const runtime = createAuthenticatedSyncRuntime(authService, client);
-      const lifecycle = new DefaultSyncLifecycle(runtime, AppState, undefined, authService);
-      setM17({ client, authService, runtime, lifecycle });
+  const openM17Qa = async () => {
+    setM17Loading(true);
+    setM17LoadError(null);
+    try {
+      let composition = m17;
+      if (!composition) {
+        const client = createM17SupabaseClient();
+        const authService = new AuthService(client);
+        const runtime = createAuthenticatedSyncRuntime(authService, client);
+        const lifecycle = new DefaultSyncLifecycle(runtime, AppState, undefined, authService);
+        composition = { client, authService, runtime, lifecycle };
+        setM17(composition);
+      }
+
+      if (!m17QaScreen) {
+        const module = await import('./src/attendance/M17RealRuntimeQaScreen');
+        setM17QaScreen(() => module.M17RealRuntimeQaScreen);
+      }
+      setScreen('m17qa');
+    } catch (error) {
+      setM17LoadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setM17Loading(false);
     }
-    setScreen('m17qa');
   };
 
   if (screen === 'workerQr') {
@@ -176,7 +200,8 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   }
 
   if (screen === 'm17qa') {
-    if (!m17) return null;
+    if (!m17 || !m17QaScreen) return null;
+    const M17RealRuntimeQaScreen = m17QaScreen;
     return (
       <SafeAreaView style={styles.root}>
         <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
@@ -203,9 +228,10 @@ export default function App({ syncLifecycle }: AppProps = {}) {
           <Text style={styles.cardBody}>M1.6 exercises local check-in/check-out, durable command history, restart persistence and transactional rollback without touching production Supabase.</Text>
         </View>
 
-        <Pressable style={styles.primary} onPress={openM17Qa}>
-          <Text style={styles.primaryText}>RUN M1.7 REAL RUNTIME QA</Text>
+        <Pressable style={styles.primary} disabled={m17Loading} onPress={() => void openM17Qa()}>
+          <Text style={styles.primaryText}>{m17Loading ? 'LOADING M1.7 QA…' : 'RUN M1.7 REAL RUNTIME QA'}</Text>
         </Pressable>
+        {m17LoadError && <Text style={styles.error}>M1.7 QA could not be loaded: {m17LoadError}</Text>}
         <Pressable style={styles.primary} onPress={() => setScreen('m16qa')}>
           <Text style={styles.primaryText}>RUN M1.6 DEVICE SUITE</Text>
         </Pressable>
@@ -244,6 +270,7 @@ const styles = StyleSheet.create({
   secondaryText: { color: '#0D1733', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
   qaButton: { marginTop: 10, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: '#E8ECF4', borderWidth: 1, borderColor: '#CBD3E3' },
   qaButtonText: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  error: { marginTop: 8, color: '#B42318', fontSize: 11, lineHeight: 16 },
   footer: { marginTop: 22 },
   footerTitle: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
   footerText: { marginTop: 4, color: '#7A8499', fontSize: 11, lineHeight: 16 },
