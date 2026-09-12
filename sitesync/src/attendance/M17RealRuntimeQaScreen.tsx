@@ -1,22 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AuthService } from '../auth/authService';
+import type { AuthService } from '../auth/authService';
 import { AttendanceService } from './attendanceService';
 import { getDb, getLocalDeviceSession, initializeDatabase } from '../database/localPersistence';
 import { DeviceRegistrationService } from '../identity/deviceRegistrationService';
 import { IdentityService } from '../identity/identityService';
 import type { ApplicationContext } from '../identity/projectContext';
-import { createAuthenticatedSyncRuntime } from '../sync/syncRuntime';
-import { createM17SupabaseClient } from '../supabase/m17SupabaseClient';
+import type { SyncRuntime } from '../sync/syncRuntime';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 type QaResult = { label: string; detail: string; passed: boolean };
 
 const DATABASE_NAME = 'm17-real-runtime-device.db';
-
-const client = createM17SupabaseClient();
-const authService = new AuthService(client);
-const identityService = new IdentityService(client);
-const deviceService = new DeviceRegistrationService(client);
 
 function nowUtc(): string {
   return new Date().toISOString();
@@ -26,7 +21,14 @@ function makeInstallationKey(): string {
   return `m17-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function M17RealRuntimeQaScreen({ onBack }: { onBack: () => void }) {
+interface M17RealRuntimeQaScreenProps {
+  onBack: () => void;
+  authService: AuthService;
+  client: SupabaseClient;
+  runtime: Pick<SyncRuntime, 'start' | 'stop' | 'requestManualSync'>;
+}
+
+export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }: M17RealRuntimeQaScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [context, setContext] = useState<ApplicationContext | null>(null);
@@ -35,9 +37,9 @@ export function M17RealRuntimeQaScreen({ onBack }: { onBack: () => void }) {
   const [status, setStatus] = useState('Database initialising…');
   const [localState, setLocalState] = useState('No local attendance state loaded');
 
-  const runtime = useMemo(() => createAuthenticatedSyncRuntime(authService, client), []);
-
   useEffect(() => {
+    const identityService = new IdentityService(client);
+    const deviceService = new DeviceRegistrationService(client);
     void initializeDatabase(DATABASE_NAME).then(async () => {
       await refreshLocalState();
       setStatus('READY — isolated M1.7 runtime QA');
@@ -46,39 +48,39 @@ export function M17RealRuntimeQaScreen({ onBack }: { onBack: () => void }) {
     });
 
     return () => { void runtime.stop(); };
-  }, [runtime]);
 
-  const refreshLocalState = async () => {
-    try {
-      const db = getDb();
-      const result = await db.execute(
-        `SELECT s.state, s.current_revision, s.server_revision, s.sync_status,
-          (SELECT COUNT(*) FROM command_ledger c WHERE c.project_id = s.project_id AND c.person_id = s.person_id AND c.status = 'PENDING') AS pending_commands
-         FROM attendance_state s ORDER BY s.updated_at DESC LIMIT 1`,
-      );
-      if (result.rows.length === 0) {
-        setLocalState('No attendance state');
-        return;
+    async function refreshLocalState() {
+      try {
+        const db = getDb();
+        const result = await db.execute(
+          `SELECT s.state, s.current_revision, s.server_revision, s.sync_status,
+            (SELECT COUNT(*) FROM command_ledger c WHERE c.project_id = s.project_id AND c.person_id = s.person_id AND c.status = 'PENDING') AS pending_commands
+           FROM attendance_state s ORDER BY s.updated_at DESC LIMIT 1`,
+        );
+        if (result.rows.length === 0) {
+          setLocalState('No attendance state');
+          return;
+        }
+        const row = result.rows.item(0) as Record<string, unknown>;
+        setLocalState(`${String(row.state)} · local rev ${String(row.current_revision)} · server rev ${String(row.server_revision ?? 'null')} · ${String(row.sync_status)} · pending ${String(row.pending_commands)}`);
+      } catch (error) {
+        setLocalState(error instanceof Error ? error.message : String(error));
       }
-      const row = result.rows.item(0) as Record<string, unknown>;
-      setLocalState(`${String(row.state)} · local rev ${String(row.current_revision)} · server rev ${String(row.server_revision ?? 'null')} · ${String(row.sync_status)} · pending ${String(row.pending_commands)}`);
-    } catch (error) {
-      setLocalState(error instanceof Error ? error.message : String(error));
     }
-  };
+  }, [client, runtime]);
 
   const login = async () => {
     setRunning(true);
     setStatus('Authenticating against isolated Supabase…');
     try {
       const session = await authService.signIn(email.trim(), password);
-      const identity = await identityService.resolve(session.user.id);
+      const identity = await new IdentityService(client).resolve(session.user.id);
       if (identity.projectAssignments.length === 0) throw new Error('Authenticated user has no active project assignment');
 
-      let installation = await deviceService.get(session.user.id);
+      let installation = await new DeviceRegistrationService(client).get(session.user.id);
       const localDevice = await getLocalDeviceSession(session.user.id);
       if (!installation || installation.status !== 'ACTIVE') {
-        installation = await deviceService.register(session.user.id, {
+        installation = await new DeviceRegistrationService(client).register(session.user.id, {
           installationKey: localDevice?.installationKey ?? makeInstallationKey(),
           deviceName: 'M1.7 PHYSICAL QA DEVICE',
           appVersion: 'M1.7-QA',
@@ -88,7 +90,7 @@ export function M17RealRuntimeQaScreen({ onBack }: { onBack: () => void }) {
       }
       if (installation.status !== 'ACTIVE') throw new Error('Authoritative device installation is REVOKED');
 
-      const resolved = await identityService.resolve(session.user.id);
+      const resolved = await new IdentityService(client).resolve(session.user.id);
       const activeAssignment = resolved.projectAssignments.find(a => a.status === 'ACTIVE');
       if (!activeAssignment) throw new Error('No active project assignment after device registration');
       setContext({
@@ -168,6 +170,25 @@ export function M17RealRuntimeQaScreen({ onBack }: { onBack: () => void }) {
       setStatus('SYNC FAILED');
     } finally {
       setRunning(false);
+    }
+  };
+
+  const refreshLocalState = async () => {
+    try {
+      const db = getDb();
+      const result = await db.execute(
+        `SELECT s.state, s.current_revision, s.server_revision, s.sync_status,
+          (SELECT COUNT(*) FROM command_ledger c WHERE c.project_id = s.project_id AND c.person_id = s.person_id AND c.status = 'PENDING') AS pending_commands
+         FROM attendance_state s ORDER BY s.updated_at DESC LIMIT 1`,
+      );
+      if (result.rows.length === 0) {
+        setLocalState('No attendance state');
+        return;
+      }
+      const row = result.rows.item(0) as Record<string, unknown>;
+      setLocalState(`${String(row.state)} · local rev ${String(row.current_revision)} · server rev ${String(row.server_revision ?? 'null')} · ${String(row.sync_status)} · pending ${String(row.pending_commands)}`);
+    } catch (error) {
+      setLocalState(error instanceof Error ? error.message : String(error));
     }
   };
 
