@@ -52,10 +52,12 @@ export interface AttendanceMutationResult {
   timesheet: TimesheetRecord;
 }
 
-let idSequence = 0;
-function defaultId(prefix: string): string {
-  idSequence += 1;
-  return `${prefix}-${Date.now().toString(36)}-${idSequence.toString(36)}`;
+function uuidV4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
 }
 
 function mutationSyncStatus(online: boolean): SyncStatus {
@@ -126,9 +128,6 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
     throw new AttendanceError('INVALID_CONTEXT', 'clientOccurredAt must be a valid UTC timestamp');
   }
 
-  // For QR attendance, the caller-provided assignment is only an input hint.
-  // The mutation boundary independently checks it against trusted cached roster
-  // data before authorization can grant mutation authority.
   if (request.source === 'QR_SCAN') {
     const trustedRoster = await getProjectRoster(request.projectId, request.targetPersonId);
     if (!request.targetAssignment || !trustedRoster || !targetAssignmentMatchesTrustedRoster(request.targetAssignment, trustedRoster)) {
@@ -143,8 +142,8 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
 
   const targetAssignment = authorization.targetAssignment;
   const personId = targetAssignment.personId;
-  const commandId = request.commandId ?? defaultId('cmd');
-  const eventId = request.eventId ?? defaultId('event');
+  const commandId = request.commandId ?? uuidV4();
+  const eventId = request.eventId ?? uuidV4();
   const eventType = request.action === 'CHECK_IN' ? 'ATTENDANCE_CHECK_IN' : 'ATTENDANCE_CHECK_OUT';
 
   return withTransaction(async (tx) => {
