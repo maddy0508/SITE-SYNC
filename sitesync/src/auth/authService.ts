@@ -27,6 +27,13 @@ export class AuthService {
     return session;
   }
 
+  subscribeUser(listener: (userId: string | null) => void): () => void {
+    const { data } = this.client.auth.onAuthStateChange((_event, session) => {
+      listener(session?.user.id ?? null);
+    });
+    return () => data.subscription.unsubscribe();
+  }
+
   async signIn(email: string, password: string): Promise<Session> {
     const { data, error } = await this.client.auth.signInWithPassword({ email, password });
     if (error) throw new AuthServiceError('AUTH_FAILED', error.message);
