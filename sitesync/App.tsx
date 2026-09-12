@@ -4,6 +4,7 @@ import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
 import { M15QaScreen } from './src/qr/M15QaScreen';
 import { M16QaScreen } from './src/attendance/M16QaScreen';
+import { M17QaAccountProvisionScreen } from './src/attendance/M17QaAccountProvisionScreen';
 import { QrScannerScreen } from './src/qr/QrScannerScreen';
 import { WorkerQrIdentityScreen } from './src/qr/WorkerQrIdentityScreen';
 import type { QrRosterResolver, TrustedMembershipRecord } from './src/qr/qrValidation';
@@ -55,7 +56,7 @@ const qaResolver: QrRosterResolver = {
   async getMembership(membershipId) { return membershipId === MEMBERSHIP_ID ? membershipRecord : null; },
 };
 
-type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa' | 'm17qa';
+type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa' | 'm17provision' | 'm17qa';
 
 type M17QaScreenComponent = React.ComponentType<{
   onBack: () => void;
@@ -81,7 +82,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   }, [syncLifecycle]);
 
   useEffect(() => {
-    if (screen !== 'm17qa' || !m17) return undefined;
+    if (!m17 || (screen !== 'm17provision' && screen !== 'm17qa')) return undefined;
     return () => { void m17.lifecycle.dispose(); };
   }, [m17, screen]);
 
@@ -93,7 +94,6 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     try {
       await prepareM17Database(M17_DATABASE_NAME);
       databaseReady = true;
-
       const client = createM17SupabaseClient();
       const authService = new AuthService(client);
       const runtime = createAuthenticatedSyncRuntime(authService, client);
@@ -101,11 +101,10 @@ export default function App({ syncLifecycle }: AppProps = {}) {
       const lifecycle = new DefaultSyncLifecycle(runtime, AppState, network, authService);
       composition = { client, authService, runtime, lifecycle };
       await lifecycle.start();
-
       const module = require('./src/attendance/M17RealRuntimeQaScreen') as { M17RealRuntimeQaScreen: M17QaScreenComponent };
       setM17(composition);
       setM17QaScreen(() => module.M17RealRuntimeQaScreen);
-      setScreen('m17qa');
+      setScreen('m17provision');
     } catch (error) {
       if (composition) await composition.lifecycle.dispose().catch(() => undefined);
       if (databaseReady) await (require('./src/database/localPersistence') as typeof import('./src/database/localPersistence')).closeDatabase().catch(() => undefined);
@@ -119,6 +118,10 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   if (screen === 'scanner') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><View style={styles.scannerHeader}><Pressable onPress={() => setScreen('home')} hitSlop={12}><Text style={styles.back}>‹ BACK</Text></Pressable></View><QrScannerScreen context={scannerContext} resolver={qaResolver} online /></SafeAreaView>;
   if (screen === 'qa') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M15QaScreen onBack={() => setScreen('home')} /></SafeAreaView>;
   if (screen === 'm16qa') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M16QaScreen onBack={() => setScreen('home')} /></SafeAreaView>;
+  if (screen === 'm17provision') {
+    if (!m17) return null;
+    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17QaAccountProvisionScreen client={m17.client} onContinue={() => setScreen('m17qa')} /></SafeAreaView>;
+  }
   if (screen === 'm17qa') {
     if (!m17 || !m17QaScreen) return null;
     const M17RealRuntimeQaScreen = m17QaScreen;
