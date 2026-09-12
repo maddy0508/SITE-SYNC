@@ -50,4 +50,19 @@ describe('SyncLifecycle', () => {
     await Promise.resolve();
     expect(r.requestNetworkRestoredSync).toHaveBeenCalledTimes(1);
   });
+
+  it('stops the runtime when authentication is lost', async () => {
+    const r = runtime();
+    let authListener!: (userId: string | null) => void;
+    const auth = {
+      subscribe: jest.fn((cb: (userId: string | null) => void) => { authListener = cb; return jest.fn(); }),
+    };
+    const appState = { addEventListener: jest.fn(() => ({ remove: jest.fn() })) };
+    const lifecycle = new SyncLifecycle(r, appState, undefined, auth);
+
+    await lifecycle.start();
+    authListener(null);
+    await Promise.resolve();
+    expect(r.stop).toHaveBeenCalledTimes(1);
+  });
 });
