@@ -162,7 +162,9 @@ export class SyncCommandRepository {
   }
 
   private async getCommand(commandId: string): Promise<ClaimedSyncCommand> {
-    return this.getCommandInTransaction({ executeSql: (...args: any[]) => getDb().executeSql(...args) } as Transaction, commandId);
+    const result = await getDb().execute(`${SELECT} WHERE command_id=?`, [commandId]);
+    if (result.rows.length === 0) throw new Error(`Unknown command ${commandId}`);
+    return mapCommand(result.rows.item(0) as unknown as Record<string, unknown>);
   }
 
   private async getCommandInTransaction(tx: Transaction, commandId: string): Promise<ClaimedSyncCommand> {
