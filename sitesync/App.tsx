@@ -14,6 +14,7 @@ import { AuthService } from './src/auth/authService';
 import { createAuthenticatedSyncRuntime } from './src/sync/syncRuntime';
 import { createM17NetworkStateSource } from './src/sync/m17NetworkState';
 import { createM17SupabaseClient, M17_SUPABASE_URL } from './src/supabase/m17SupabaseClient';
+import { prepareM17Database } from './src/sync/m17QaBootstrap';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -90,8 +91,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     let composition: M17Composition | null = null;
     let databaseReady = false;
     try {
-      const database = require('./src/database/localPersistence') as typeof import('./src/database/localPersistence');
-      await database.initializeDatabase(M17_DATABASE_NAME);
+      await prepareM17Database(M17_DATABASE_NAME);
       databaseReady = true;
 
       const client = createM17SupabaseClient();
