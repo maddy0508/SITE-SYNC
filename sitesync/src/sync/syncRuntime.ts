@@ -1,4 +1,7 @@
+import type { AuthService } from '../auth/authService';
 import { getLocalDeviceSession, type LocalDeviceSessionRecord } from '../database/localPersistence';
+import { SyncCommandRepository } from './syncCommandRepository';
+import { SupabaseSyncTransport, type SupabaseRpcClient } from './supabaseSyncTransport';
 import { SyncWorker, type SyncRunResult, type SyncDeviceContext } from './syncWorker';
 import type { SyncTransport } from './syncTransport';
 
@@ -16,13 +19,12 @@ export interface SyncRuntimeDependencies {
 
 const defaultGetDeviceSession = async (userId: string) => getLocalDeviceSession(userId);
 
-/**
- * Owns the application-level lifetime of the sync worker.
- *
- * A worker is created only after both an authenticated user and an ACTIVE
- * locally registered device have been resolved. The device installation ID
- * therefore cannot originate in UI input or arbitrary caller data.
- */
+export interface AuthenticatedSyncRuntimeOptions {
+  getDeviceSession?: SyncRuntimeDependencies['getDeviceSession'];
+  createWorker?: SyncRuntimeDependencies['createWorker'];
+}
+
+/** Owns the application-level lifetime of the sync worker. */
 export class SyncRuntime {
   private worker: SyncRuntimeWorker | null = null;
   private starting: Promise<void> | null = null;
@@ -73,7 +75,31 @@ export class SyncRuntime {
   }
 }
 
-/** Convenience adapter for composing the existing SyncWorker without hiding its dependencies. */
+/** Compose the production runtime from the existing AuthService, local device session, and narrow RPC transport. */
+export function createAuthenticatedSyncRuntime(
+  authService: AuthService,
+  rpcClient: SupabaseRpcClient,
+  options: AuthenticatedSyncRuntimeOptions = {},
+): SyncRuntime {
+  const createWorker = options.createWorker ?? (async (_userId: string, deviceInstallationId: string) => {
+    const transport: SyncTransport = new SupabaseSyncTransport(rpcClient);
+    const deviceContext: SyncDeviceContext = {
+      getDeviceInstallationId: async () => deviceInstallationId,
+    };
+    return new SyncWorker(transport, new SyncCommandRepository(), deviceContext);
+  });
+
+  return new SyncRuntime({
+    getAuthenticatedUserId: async () => {
+      const session = await authService.getCurrentSession();
+      return session?.user.id ?? null;
+    },
+    getDeviceSession: options.getDeviceSession,
+    createWorker,
+  });
+}
+
+/** Convenience adapter for composing a SyncWorker from an injected transport factory. */
 export function createSyncWorkerFactory(
   createTransport: (userId: string) => Promise<SyncTransport>,
 ): SyncRuntimeDependencies['createWorker'] {
