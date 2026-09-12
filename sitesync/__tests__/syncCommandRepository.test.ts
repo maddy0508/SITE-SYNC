@@ -1,5 +1,5 @@
 import { closeDatabase, getDb, initializeDatabase } from '../src/database/localPersistence';
-import { SyncCommandRepository } from '../src/sync/syncCommandRepository';
+import { SyncCommandRepository, shouldApplyProjection } from '../src/sync/syncCommandRepository';
 
 const NOW = '2026-09-12T00:00:00.000Z';
 
@@ -48,5 +48,19 @@ describe('sync command repository', () => {
     const repository = new SyncCommandRepository();
     expect(await repository.releaseStaleClaims(NOW)).toBe(1);
     expect((await repository.claimNextEligible(NOW))?.status).toBe('PROCESSING');
+  });
+
+  it('rejects an older command from overwriting a newer projection', () => {
+    expect(shouldApplyProjection(
+      { commandId: 'cmd-newer', createdAt: '2026-09-12T00:00:02.000Z' },
+      { commandId: 'cmd-older', createdAt: '2026-09-12T00:00:01.000Z' },
+    )).toBe(false);
+  });
+
+  it('accepts the current or newer command for projection', () => {
+    expect(shouldApplyProjection(
+      { commandId: 'cmd-older', createdAt: '2026-09-12T00:00:01.000Z' },
+      { commandId: 'cmd-newer', createdAt: '2026-09-12T00:00:02.000Z' },
+    )).toBe(true);
   });
 });
