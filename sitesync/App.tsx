@@ -1,13 +1,19 @@
-import React, { useEffect, useState } from 'react';
-import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { AppState, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
 import { M15QaScreen } from './src/qr/M15QaScreen';
 import { M16QaScreen } from './src/attendance/M16QaScreen';
+import { M17RealRuntimeQaScreen } from './src/attendance/M17RealRuntimeQaScreen';
 import { QrScannerScreen } from './src/qr/QrScannerScreen';
 import { WorkerQrIdentityScreen } from './src/qr/WorkerQrIdentityScreen';
 import type { QrRosterResolver, TrustedMembershipRecord } from './src/qr/qrValidation';
 import type { SyncLifecycle } from './src/sync/syncLifecycle';
+import { SyncLifecycle as DefaultSyncLifecycle } from './src/sync/syncLifecycle';
+import { AuthService } from './src/auth/authService';
+import { createAuthenticatedSyncRuntime } from './src/sync/syncRuntime';
+import { createM17SupabaseClient } from './src/supabase/m17SupabaseClient';
+import { initializeDatabase } from './src/database/localPersistence';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -15,6 +21,7 @@ const PERSON_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const PROJECT_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const COMPANY_ID = 'company-1';
 const MEMBERSHIP_ID = 'membership-1';
+const M17_DATABASE_NAME = 'm17-real-runtime-device.db';
 
 const applicationContext: ApplicationContext = {
   userId: USER_ID,
@@ -82,7 +89,7 @@ const qaResolver: QrRosterResolver = {
   },
 };
 
-type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa';
+type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa' | 'm17qa';
 
 export interface AppProps {
   syncLifecycle?: Pick<SyncLifecycle, 'start' | 'dispose'>;
@@ -90,12 +97,30 @@ export interface AppProps {
 
 export default function App({ syncLifecycle }: AppProps = {}) {
   const [screen, setScreen] = useState<Screen>('home');
+  const defaultLifecycle = useMemo(() => {
+    if (syncLifecycle) return null;
+    const client = createM17SupabaseClient();
+    const authService = new AuthService(client);
+    const runtime = createAuthenticatedSyncRuntime(authService, client);
+    return new DefaultSyncLifecycle(runtime, AppState, undefined, authService);
+  }, [syncLifecycle]);
 
   useEffect(() => {
-    if (!syncLifecycle) return undefined;
-    void syncLifecycle.start();
-    return () => { void syncLifecycle.dispose(); };
-  }, [syncLifecycle]);
+    if (syncLifecycle) {
+      void syncLifecycle.start();
+      return () => { void syncLifecycle.dispose(); };
+    }
+
+    if (!defaultLifecycle) return undefined;
+    let cancelled = false;
+    void initializeDatabase(M17_DATABASE_NAME).then(() => {
+      if (!cancelled) void defaultLifecycle.start();
+    });
+    return () => {
+      cancelled = true;
+      void defaultLifecycle.dispose();
+    };
+  }, [defaultLifecycle, syncLifecycle]);
 
   if (screen === 'workerQr') {
     return (
@@ -144,6 +169,15 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     );
   }
 
+  if (screen === 'm17qa') {
+    return (
+      <SafeAreaView style={styles.root}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
+        <M17RealRuntimeQaScreen onBack={() => setScreen('home')} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.root}>
       <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
@@ -157,6 +191,9 @@ export default function App({ syncLifecycle }: AppProps = {}) {
           <Text style={styles.cardBody}>M1.6 exercises local check-in/check-out, durable command history, restart persistence and transactional rollback without touching production Supabase.</Text>
         </View>
 
+        <Pressable style={styles.primary} onPress={() => setScreen('m17qa')}>
+          <Text style={styles.primaryText}>RUN M1.7 REAL RUNTIME QA</Text>
+        </Pressable>
         <Pressable style={styles.primary} onPress={() => setScreen('m16qa')}>
           <Text style={styles.primaryText}>RUN M1.6 DEVICE SUITE</Text>
         </Pressable>
@@ -172,8 +209,8 @@ export default function App({ syncLifecycle }: AppProps = {}) {
 
         <View style={styles.footer}>
           <Text style={styles.footerTitle}>TEST CONTEXT</Text>
-          <Text style={styles.footerText}>M1.6 isolated local SQLite fixture</Text>
-          <Text style={styles.footerText}>No production Supabase mutation.</Text>
+          <Text style={styles.footerText}>M1.7 uses isolated Supabase + local SQLite</Text>
+          <Text style={styles.footerText}>Production Supabase remains untouched.</Text>
         </View>
       </View>
     </SafeAreaView>
@@ -189,7 +226,7 @@ const styles = StyleSheet.create({
   card: { marginTop: 28, padding: 20, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE2EF' },
   cardTitle: { color: '#0D1733', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
   cardBody: { marginTop: 8, color: '#59657D', fontSize: 13, lineHeight: 19 },
-  primary: { marginTop: 18, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#0D1733' },
+  primary: { marginTop: 12, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#0D1733' },
   primaryText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
   secondary: { marginTop: 10, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#F3B33D' },
   secondaryText: { color: '#0D1733', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
