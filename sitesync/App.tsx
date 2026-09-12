@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
@@ -7,6 +7,7 @@ import { M16QaScreen } from './src/attendance/M16QaScreen';
 import { QrScannerScreen } from './src/qr/QrScannerScreen';
 import { WorkerQrIdentityScreen } from './src/qr/WorkerQrIdentityScreen';
 import type { QrRosterResolver, TrustedMembershipRecord } from './src/qr/qrValidation';
+import type { SyncLifecycle } from './src/sync/syncLifecycle';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ORG_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -83,8 +84,18 @@ const qaResolver: QrRosterResolver = {
 
 type Screen = 'home' | 'workerQr' | 'scanner' | 'qa' | 'm16qa';
 
-export default function App() {
+export interface AppProps {
+  syncLifecycle?: Pick<SyncLifecycle, 'start' | 'dispose'>;
+}
+
+export default function App({ syncLifecycle }: AppProps = {}) {
   const [screen, setScreen] = useState<Screen>('home');
+
+  useEffect(() => {
+    if (!syncLifecycle) return undefined;
+    void syncLifecycle.start();
+    return () => { void syncLifecycle.dispose(); };
+  }, [syncLifecycle]);
 
   if (screen === 'workerQr') {
     return (
