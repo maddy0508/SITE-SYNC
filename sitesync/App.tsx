@@ -81,10 +81,12 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     return () => { void syncLifecycle.dispose(); };
   }, [syncLifecycle]);
 
-  useEffect(() => {
-    if (!m17 || (screen !== 'm17provision' && screen !== 'm17qa')) return undefined;
-    return () => { void m17.lifecycle.dispose(); };
-  }, [m17, screen]);
+  const exitM17 = async () => {
+    if (m17) await m17.lifecycle.dispose().catch(() => undefined);
+    setM17(null);
+    setM17QaScreen(null);
+    setScreen('home');
+  };
 
   const openM17Qa = async () => {
     setM17Loading(true);
@@ -125,7 +127,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   if (screen === 'm17qa') {
     if (!m17 || !m17QaScreen) return null;
     const M17RealRuntimeQaScreen = m17QaScreen;
-    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17RealRuntimeQaScreen onBack={() => setScreen('home')} authService={m17.authService} client={m17.client} runtime={m17.runtime} /></SafeAreaView>;
+    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17RealRuntimeQaScreen onBack={exitM17} authService={m17.authService} client={m17.client} runtime={m17.runtime} /></SafeAreaView>;
   }
 
   return <SafeAreaView style={styles.root}>
