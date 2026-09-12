@@ -117,9 +117,11 @@ describe('SyncRuntime', () => {
     });
 
     const startPromise = runtime.start();
+    for (let attempt = 0; attempt < 20 && !resolveWorker; attempt += 1) {
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    expect(resolveWorker).toBeDefined();
     const stopPromise = runtime.stop();
-    await Promise.resolve();
-    await Promise.resolve();
     resolveWorker(w);
     await Promise.all([startPromise, stopPromise]);
 
