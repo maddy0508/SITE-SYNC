@@ -23,8 +23,8 @@ INSERT INTO public.company_memberships (id, organisation_id, company_id, person_
 INSERT INTO public.projects (id, organisation_id, name) VALUES
  ('caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Project') ON CONFLICT DO NOTHING;
 INSERT INTO public.project_company_participation (organisation_id, project_id, company_id, status) VALUES
- ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-000000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000001','ACTIVE'),
- ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-000000000002','caaaaaaa-aaaa-aaaa-aaaa-000000000002','ACTIVE') ON CONFLICT DO NOTHING;
+ ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000001','ACTIVE'),
+ ('caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000002','ACTIVE') ON CONFLICT DO NOTHING;
 INSERT INTO public.project_assignments (id, organisation_id, project_id, company_id, company_membership_id, person_id, project_role, status) VALUES
  ('caaaaaaa-aaaa-aaaa-aaaa-400000000001','caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000001','caaaaaaa-aaaa-aaaa-aaaa-200000000001','caaaaaaa-aaaa-aaaa-aaaa-100000000001','SUPERVISOR','ACTIVE'),
  ('caaaaaaa-aaaa-aaaa-aaaa-400000000002','caaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','caaaaaaa-aaaa-aaaa-aaaa-300000000001','caaaaaaa-aaaa-aaaa-aaaa-000000000002','caaaaaaa-aaaa-aaaa-aaaa-200000000002','caaaaaaa-aaaa-aaaa-aaaa-100000000002','WORKER','ACTIVE') ON CONFLICT DO NOTHING;
