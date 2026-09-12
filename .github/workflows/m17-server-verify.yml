@@ -30,6 +30,8 @@ on:
 permissions:
   contents: read
 
+# Verification intentionally covers the complete migration chain, including
+# the latest M1.7 compatibility hardening migration.
 jobs:
   typescript:
     runs-on: ubuntu-latest
