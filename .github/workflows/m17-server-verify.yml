@@ -87,6 +87,7 @@ jobs:
         run: |
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260815000000_init_identity_tenancy.sql
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260815000001_init_device_installations.sql
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT, UPDATE ON public.device_installations TO authenticated;"
       - name: Apply all M1.7 server migrations
         env:
           PGPASSWORD: postgres
