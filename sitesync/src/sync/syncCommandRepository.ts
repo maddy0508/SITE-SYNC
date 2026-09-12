@@ -6,18 +6,6 @@ import type { Transaction } from '../database/sqliteAdapter';
 export interface ClaimedSyncCommand extends CommandLedgerRecord { commandPayloadJson: string; }
 type SqlFieldValue = string | number | null;
 
-export interface ProjectionCommandOrder {
-  commandId: string;
-  createdAt: string;
-}
-
-/** Returns whether a completed command is still the newest command for a projection. */
-export function shouldApplyProjection(current: ProjectionCommandOrder | null, candidate: ProjectionCommandOrder): boolean {
-  if (!current) return true;
-  return candidate.createdAt > current.createdAt
-    || (candidate.createdAt === current.createdAt && candidate.commandId >= current.commandId);
-}
-
 function mapCommand(row: Record<string, unknown>): ClaimedSyncCommand {
   return {
     commandId: String(row.commandId), projectId: String(row.projectId), personId: String(row.personId),
@@ -42,14 +30,6 @@ synced_at as syncedAt, next_retry_at as nextRetryAt, server_result_json as serve
 server_error_code as serverErrorCode, failure_diagnostics as failureDiagnostics,
 created_at as createdAt, updated_at as updatedAt, command_payload_json as commandPayloadJson
 FROM command_ledger`;
-
-const NEWER_COMMAND_GUARD = `NOT EXISTS (
-  SELECT 1 FROM command_ledger current_command
-  WHERE current_command.command_id = attendance_state.last_command_id
-    AND (current_command.created_at > (SELECT created_at FROM command_ledger WHERE command_id = ?)
-      OR (current_command.created_at = (SELECT created_at FROM command_ledger WHERE command_id = ?)
-          AND current_command.command_id > ?))
-)`;
 
 export class SyncCommandRepository {
   async releaseStaleClaims(now: string): Promise<number> {
@@ -102,11 +82,8 @@ export class SyncCommandRepository {
         serverRespondedAt: now, syncedAt: now, serverResultJson: JSON.stringify(result), serverErrorCode: null,
         failureDiagnostics: null, nextRetryAt: null, updatedAt: now,
       });
-      await tx.executeSql(
-        `UPDATE attendance_state SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=?
-         WHERE last_command_id=? AND ${NEWER_COMMAND_GUARD}`,
-        [serverRevision, now, commandId, commandId, commandId, commandId],
-      );
+      await tx.executeSql(`UPDATE attendance_state SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=? WHERE last_command_id=?`,
+        [serverRevision, now, commandId]);
       await tx.executeSql(
         `UPDATE timesheet SET sync_status='ONLINE_VERIFIED', server_revision=?, updated_at=?
          WHERE (project_id, person_id, work_date_utc) IN (
@@ -129,15 +106,12 @@ export class SyncCommandRepository {
       await this.transitionInTransaction(tx, current, 'FAILED', {
         serverRespondedAt: now, serverErrorCode: code, failureDiagnostics: diagnostics, updatedAt: now,
       });
-      await tx.executeSql(
-        `UPDATE attendance_state SET sync_status='FAILED', updated_at=? WHERE last_command_id=? AND ${NEWER_COMMAND_GUARD}`,
-        [now, commandId, commandId, commandId, commandId],
-      );
+      await tx.executeSql(`UPDATE attendance_state SET sync_status='FAILED', updated_at=? WHERE last_command_id=?`, [now, commandId]);
       await tx.executeSql(
         `UPDATE timesheet SET sync_status='FAILED', updated_at=? WHERE (project_id, person_id, work_date_utc) IN (
            SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
          ) AND source_state_revision=(SELECT base_revision + 1 FROM command_ledger WHERE command_id=?)`,
-        [now, commandId, commandId, commandId],
+        [now, commandId, commandId],
       );
     });
   }
@@ -160,11 +134,8 @@ export class SyncCommandRepository {
          FROM command_ledger WHERE command_id=?`,
         [conflictId, serverRevision, serverPayload, reasonCode, now, now, commandId],
       );
-      await tx.executeSql(
-        `UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=?
-         WHERE last_command_id=? AND ${NEWER_COMMAND_GUARD}`,
-        [serverRevision, now, commandId, commandId, commandId, commandId],
-      );
+      await tx.executeSql(`UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`,
+        [serverRevision, now, commandId]);
       await tx.executeSql(
         `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=?
          AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)
