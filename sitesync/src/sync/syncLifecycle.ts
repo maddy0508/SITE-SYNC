@@ -8,10 +8,15 @@ export interface NetworkStateSource {
   subscribe(listener: (online: boolean) => void): () => void;
 }
 
+export interface AuthStateSource {
+  subscribe(listener: (userId: string | null) => void): () => void;
+}
+
 /** Binds platform lifecycle events to the already-serialized SyncRuntime. */
 export class SyncLifecycle {
   private appStateSubscription: { remove(): void } | null = null;
   private removeNetworkSubscription: (() => void) | null = null;
+  private removeAuthSubscription: (() => void) | null = null;
   private disposed = false;
   private wasOnline: boolean | null = null;
 
@@ -19,6 +24,7 @@ export class SyncLifecycle {
     private readonly runtime: Pick<SyncRuntime, 'start' | 'stop' | 'requestManualSync' | 'requestNetworkRestoredSync'>,
     private readonly appState: AppStateSource,
     private readonly network?: NetworkStateSource,
+    private readonly auth?: AuthStateSource,
   ) {}
 
   async start(): Promise<void> {
@@ -37,6 +43,14 @@ export class SyncLifecycle {
         if (restored && !this.disposed) void this.runtime.requestNetworkRestoredSync();
       });
     }
+
+    if (this.auth) {
+      this.removeAuthSubscription = this.auth.subscribe(userId => {
+        if (this.disposed) return;
+        if (userId) void this.runtime.start();
+        else void this.runtime.stop();
+      });
+    }
   }
 
   async dispose(): Promise<void> {
@@ -46,6 +60,8 @@ export class SyncLifecycle {
     this.appStateSubscription = null;
     this.removeNetworkSubscription?.();
     this.removeNetworkSubscription = null;
+    this.removeAuthSubscription?.();
+    this.removeAuthSubscription = null;
     await this.runtime.stop();
   }
 }
