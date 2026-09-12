@@ -1,0 +1,41 @@
+name: M1.7 lockfile refresh
+
+on:
+  push:
+    branches:
+      - 'm17-real-app-runtime'
+    paths:
+      - 'sitesync/package.json'
+      - 'sitesync/package-lock.json'
+      - '.github/workflows/m17-lock-refresh.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sitesync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+      - name: Regenerate committed lockfile
+        run: npm install --package-lock-only --ignore-scripts
+      - name: Commit regenerated lockfile
+        working-directory: .
+        run: |
+          if git diff --quiet -- sitesync/package-lock.json; then
+            echo 'Lockfile already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add sitesync/package-lock.json
+          git commit -m 'chore(m17): refresh npm lockfile'
+          git push
