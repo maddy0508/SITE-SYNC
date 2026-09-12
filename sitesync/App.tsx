@@ -22,6 +22,7 @@ const PERSON_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const PROJECT_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const COMPANY_ID = 'company-1';
 const MEMBERSHIP_ID = 'membership-1';
+const M17_DATABASE_NAME = 'm17-real-runtime-device.db';
 
 const applicationContext: ApplicationContext = {
   userId: USER_ID,
@@ -63,7 +64,6 @@ type M17QaScreenComponent = React.ComponentType<{
 }>;
 
 export interface AppProps { syncLifecycle?: Pick<SyncLifecycle, 'start' | 'dispose'>; }
-
 interface M17Composition { client: SupabaseClient; authService: AuthService; runtime: SyncRuntime; lifecycle: DefaultSyncLifecycle; }
 
 export default function App({ syncLifecycle }: AppProps = {}) {
@@ -87,24 +87,28 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   const openM17Qa = async () => {
     setM17Loading(true);
     setM17LoadError(null);
+    let composition: M17Composition | null = null;
+    let databaseReady = false;
     try {
-      let composition = m17;
-      if (!composition) {
-        const client = createM17SupabaseClient();
-        const authService = new AuthService(client);
-        const runtime = createAuthenticatedSyncRuntime(authService, client);
-        const network = createM17NetworkStateSource(M17_SUPABASE_URL);
-        const lifecycle = new DefaultSyncLifecycle(runtime, AppState, network, authService);
-        composition = { client, authService, runtime, lifecycle };
-        setM17(composition);
-      }
+      const database = require('./src/database/localPersistence') as typeof import('./src/database/localPersistence');
+      await database.initializeDatabase(M17_DATABASE_NAME);
+      databaseReady = true;
 
-      if (!m17QaScreen) {
-        const module = require('./src/attendance/M17RealRuntimeQaScreen') as { M17RealRuntimeQaScreen: M17QaScreenComponent };
-        setM17QaScreen(() => module.M17RealRuntimeQaScreen);
-      }
+      const client = createM17SupabaseClient();
+      const authService = new AuthService(client);
+      const runtime = createAuthenticatedSyncRuntime(authService, client);
+      const network = createM17NetworkStateSource(M17_SUPABASE_URL);
+      const lifecycle = new DefaultSyncLifecycle(runtime, AppState, network, authService);
+      composition = { client, authService, runtime, lifecycle };
+      await lifecycle.start();
+
+      const module = require('./src/attendance/M17RealRuntimeQaScreen') as { M17RealRuntimeQaScreen: M17QaScreenComponent };
+      setM17(composition);
+      setM17QaScreen(() => module.M17RealRuntimeQaScreen);
       setScreen('m17qa');
     } catch (error) {
+      if (composition) await composition.lifecycle.dispose().catch(() => undefined);
+      if (databaseReady) await (require('./src/database/localPersistence') as typeof import('./src/database/localPersistence')).closeDatabase().catch(() => undefined);
       setM17LoadError(error instanceof Error ? error.message : String(error));
     } finally {
       setM17Loading(false);
@@ -115,7 +119,6 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   if (screen === 'scanner') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><View style={styles.scannerHeader}><Pressable onPress={() => setScreen('home')} hitSlop={12}><Text style={styles.back}>‹ BACK</Text></Pressable></View><QrScannerScreen context={scannerContext} resolver={qaResolver} online /></SafeAreaView>;
   if (screen === 'qa') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M15QaScreen onBack={() => setScreen('home')} /></SafeAreaView>;
   if (screen === 'm16qa') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M16QaScreen onBack={() => setScreen('home')} /></SafeAreaView>;
-
   if (screen === 'm17qa') {
     if (!m17 || !m17QaScreen) return null;
     const M17RealRuntimeQaScreen = m17QaScreen;
@@ -125,9 +128,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   return <SafeAreaView style={styles.root}>
     <StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" />
     <View style={styles.home}>
-      <Text style={styles.eyebrow}>SITE-SYNC</Text>
-      <Text style={styles.title}>M1.6 ATTENDANCE TEST</Text>
-      <Text style={styles.subtitle}>Standalone device verification</Text>
+      <Text style={styles.eyebrow}>SITE-SYNC</Text><Text style={styles.title}>M1.6 ATTENDANCE TEST</Text><Text style={styles.subtitle}>Standalone device verification</Text>
       <View style={styles.card}><Text style={styles.cardTitle}>OFFLINE ATTENDANCE</Text><Text style={styles.cardBody}>M1.6 exercises local check-in/check-out, durable command history, restart persistence and transactional rollback without touching production Supabase.</Text></View>
       <Pressable style={styles.primary} disabled={m17Loading} onPress={() => void openM17Qa()}><Text style={styles.primaryText}>{m17Loading ? 'LOADING M1.7 QA…' : 'RUN M1.7 REAL RUNTIME QA'}</Text></Pressable>
       {m17LoadError && <Text style={styles.error}>M1.7 QA could not be loaded: {m17LoadError}</Text>}
