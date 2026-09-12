@@ -5,6 +5,7 @@ on:
     branches:
       - 'mckellarmaddy/mmm-35-m17-sync-engine-foundation*'
       - 'm17-server-transport'
+      - 'm17-runtime-integration'
     paths:
       - 'sitesync/**'
       - '.github/workflows/m17-verify.yml'
