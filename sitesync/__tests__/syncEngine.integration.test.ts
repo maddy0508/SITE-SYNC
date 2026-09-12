@@ -3,6 +3,7 @@ import { SyncWorker } from '../src/sync/syncWorker';
 import type { SyncTransport } from '../src/sync/syncTransport';
 
 const NOW = '2026-09-12T00:00:00.000Z';
+const DEVICE_CONTEXT = { getDeviceInstallationId: jest.fn().mockResolvedValue('device-1') };
 const PAYLOAD = JSON.stringify({
   commandId: 'cmd-1', eventId: 'event-1', projectAssignmentId: 'assignment-1', projectId: 'project-1', personId: 'person-1',
   organisationId: 'org-1', companyId: 'company-1', source: 'SELF', eventType: 'ATTENDANCE_CHECK_IN', baseRevision: 0,
@@ -48,7 +49,7 @@ describe('M1.7 controlled sync integration', () => {
   it('synchronizes a pending command and preserves command history', async () => {
     await seedPendingCommand();
     const transport: SyncTransport = { submit: async request => ({ kind: 'ACCEPTED', serverRevision: request.command.baseRevision + 1, result: { accepted: true } }) };
-    const worker = new SyncWorker(transport);
+    const worker = new SyncWorker(transport, undefined, DEVICE_CONTEXT);
     const result = await worker.runOnce(NOW);
     expect(result.status).toBe('SUCCEEDED');
     const row = await getDb().execute(`SELECT status, attempt_count as attemptCount, synced_at as syncedAt FROM command_ledger WHERE command_id='cmd-1'`);
@@ -59,7 +60,7 @@ describe('M1.7 controlled sync integration', () => {
   it('records a retryable transport failure durably', async () => {
     await seedPendingCommand();
     const transport: SyncTransport = { submit: async () => ({ kind: 'SERVER_ERROR', code: '503', message: 'unavailable', retryable: true }) };
-    const worker = new SyncWorker(transport);
+    const worker = new SyncWorker(transport, undefined, DEVICE_CONTEXT);
     const result = await worker.runOnce(NOW);
     expect(result.status).toBe('RETRY_SCHEDULED');
     const row = await getDb().execute(`SELECT status, next_retry_at as nextRetryAt FROM command_ledger WHERE command_id='cmd-1'`);
@@ -75,7 +76,7 @@ describe('M1.7 controlled sync integration', () => {
       submissions += 1;
       return { kind: 'DUPLICATE_ACCEPTED', serverRevision: request.command.baseRevision + 1, result: { duplicate: true } };
     } };
-    const worker = new SyncWorker(transport);
+    const worker = new SyncWorker(transport, undefined, DEVICE_CONTEXT);
     expect((await worker.runOnce(NOW)).status).toBe('SUCCEEDED');
     expect((await worker.runOnce(NOW)).status).toBe('IDLE');
     expect(submissions).toBe(1);
@@ -86,10 +87,8 @@ describe('M1.7 controlled sync integration', () => {
   it('records revision conflict without promoting the local projection to verified', async () => {
     await seedPendingCommand();
     await seedAttendanceProjection('cmd-1', 'event-1', 1);
-    const transport: SyncTransport = { submit: async () => ({
-      kind: 'REVISION_CONFLICT', serverRevision: 7, serverPayload: '{"server":"newer"}', reasonCode: 'STALE_REVISION',
-    }) };
-    const worker = new SyncWorker(transport);
+    const transport: SyncTransport = { submit: async () => ({ kind: 'REVISION_CONFLICT', serverRevision: 7, serverPayload: '{"server":"newer"}', reasonCode: 'STALE_REVISION' }) };
+    const worker = new SyncWorker(transport, undefined, DEVICE_CONTEXT);
     expect((await worker.runOnce(NOW)).status).toBe('CONFLICT');
     const command = await getDb().execute(`SELECT status, server_error_code as serverErrorCode FROM command_ledger WHERE command_id='cmd-1'`);
     expect(command.rows.item(0)).toMatchObject({ status: 'CONFLICT', serverErrorCode: 'STALE_REVISION' });
@@ -106,7 +105,7 @@ describe('M1.7 controlled sync integration', () => {
       submissions += 1;
       return { kind: 'ACCEPTED', serverRevision: request.command.baseRevision + 1, result: { resumed: true } };
     } };
-    const worker = new SyncWorker(transport);
+    const worker = new SyncWorker(transport, undefined, DEVICE_CONTEXT);
     expect((await worker.runOnce(NOW)).status).toBe('SUCCEEDED');
     expect(submissions).toBe(1);
     const row = await getDb().execute(`SELECT status, attempt_count as attemptCount FROM command_ledger WHERE command_id='cmd-1'`);
@@ -120,7 +119,7 @@ describe('M1.7 controlled sync integration', () => {
       submissions += 1;
       return { kind: 'ACCEPTED', serverRevision: 1, result: { unexpected: true } };
     } };
-    const worker = new SyncWorker(transport);
+    const worker = new SyncWorker(transport, undefined, DEVICE_CONTEXT);
     expect((await worker.runOnce(NOW)).status).toBe('IDLE');
     expect(submissions).toBe(0);
     const row = await getDb().execute(`SELECT status, server_error_code as serverErrorCode FROM command_ledger WHERE command_id='cmd-1'`);
@@ -138,7 +137,7 @@ describe('M1.7 controlled sync integration', () => {
     await getDb().execute(`UPDATE attendance_state SET state='CHECKED_OUT', last_event_id='event-2', last_command_id='cmd-2', current_revision=2, sync_status='PENDING_SYNC' WHERE project_id='project-1' AND person_id='person-1' AND work_date_utc='2026-09-12'`);
     await getDb().execute(`UPDATE timesheet SET last_out_utc=?, total_minutes=480, status='COMPLETE', source_state_revision=2, sync_status='PENDING_SYNC' WHERE project_id='project-1' AND person_id='person-1' AND work_date_utc='2026-09-12'`, [NOW]);
     const transport: SyncTransport = { submit: async request => ({ kind: 'ACCEPTED', serverRevision: 1, result: { commandId: request.command.commandId } }) };
-    const worker = new SyncWorker(transport);
+    const worker = new SyncWorker(transport, undefined, DEVICE_CONTEXT);
     expect((await worker.runOnce(NOW)).status).toBe('SUCCEEDED');
     const projection = await getDb().execute(`SELECT sync_status as syncStatus, server_revision as serverRevision, source_state_revision as sourceRevision FROM timesheet WHERE project_id='project-1' AND person_id='person-1' AND work_date_utc='2026-09-12'`);
     expect(projection.rows.item(0)).toMatchObject({ syncStatus: 'PENDING_SYNC', serverRevision: null, sourceRevision: 2 });

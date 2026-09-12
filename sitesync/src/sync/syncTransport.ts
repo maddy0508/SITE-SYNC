@@ -11,6 +11,7 @@ export interface SyncTransportRequest {
   command: CommandLedgerRecord;
   aggregate: SyncAggregateIdentity;
   payload: AttendanceCommand;
+  deviceInstallationId: string;
 }
 
 export type SyncTransportResponse =

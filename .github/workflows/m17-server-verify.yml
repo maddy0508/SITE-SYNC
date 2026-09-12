@@ -1,24 +1,40 @@
-name: M1.7 sync foundation verification
+name: M1.7 server transport verification
 
 on:
-  push:
-    branches:
-      - 'mckellarmaddy/mmm-35-m17-sync-engine-foundation*'
-      - 'm17-server-transport'
-    paths:
-      - 'sitesync/**'
-      - '.github/workflows/m17-verify.yml'
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - 'sitesync/**'
-      - '.github/workflows/m17-verify.yml'
+      - 'sitesync/supabase/**'
+      - 'sitesync/src/sync/**'
+      - 'sitesync/__tests__/supabaseSyncTransport.test.ts'
+      - 'sitesync/__tests__/syncTransport.test.ts'
+      - 'sitesync/__tests__/syncWorker.test.ts'
+      - 'sitesync/__tests__/syncEngine.integration.test.ts'
+      - 'sitesync/package.json'
+      - 'sitesync/package-lock.json'
+      - '.github/workflows/m17-server-verify.yml'
+  push:
+    branches:
+      - 'm17-server-transport'
+    paths:
+      - 'sitesync/supabase/**'
+      - 'sitesync/src/sync/**'
+      - 'sitesync/__tests__/supabaseSyncTransport.test.ts'
+      - 'sitesync/__tests__/syncTransport.test.ts'
+      - 'sitesync/__tests__/syncWorker.test.ts'
+      - 'sitesync/__tests__/syncEngine.integration.test.ts'
+      - 'sitesync/package.json'
+      - 'sitesync/package-lock.json'
+      - '.github/workflows/m17-server-verify.yml'
 
 permissions:
   contents: read
 
+# Verification intentionally covers the complete migration chain, including
+# the latest M1.7 compatibility hardening migration.
+# Fresh acceptance rerun is required after each server-boundary correction.
 jobs:
-  verify:
+  typescript:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     defaults:
@@ -31,18 +47,13 @@ jobs:
           node-version: '22.14.0'
           cache: npm
           cache-dependency-path: sitesync/package-lock.json
-      - name: Require committed lockfile
-        run: test -s package-lock.json
-      - name: Install exact dependency graph
-        run: npm ci --ignore-scripts
-      - name: Run full Jest suite
-        run: npm test -- --runInBand
-      - name: TypeScript check
-        run: npx tsc --noEmit
-      - name: ESLint
-        run: npm run lint
+      - run: test -s package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test -- --runInBand
+      - run: npx tsc --noEmit
+      - run: npm run lint
 
-  server-sql:
+  sql:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     services:
