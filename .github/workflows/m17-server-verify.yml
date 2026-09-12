@@ -32,6 +32,7 @@ permissions:
 
 # Verification intentionally covers the complete migration chain, including
 # the latest M1.7 compatibility hardening migration.
+# Fresh acceptance rerun is required after each server-boundary correction.
 jobs:
   typescript:
     runs-on: ubuntu-latest
