@@ -100,7 +100,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
       }
 
       if (!m17QaScreen) {
-        const module = await import('./src/attendance/M17RealRuntimeQaScreen');
+        const module = require('./src/attendance/M17RealRuntimeQaScreen') as { M17RealRuntimeQaScreen: M17QaScreenComponent };
         setM17QaScreen(() => module.M17RealRuntimeQaScreen);
       }
       setScreen('m17qa');
@@ -141,26 +141,5 @@ export default function App({ syncLifecycle }: AppProps = {}) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#F4F6FA' },
-  home: { flex: 1, padding: 24, justifyContent: 'center' },
-  eyebrow: { color: '#65718A', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
-  title: { marginTop: 4, color: '#0D1733', fontSize: 30, fontWeight: '900', letterSpacing: 0.5 },
-  subtitle: { marginTop: 5, color: '#59657D', fontSize: 14 },
-  card: { marginTop: 28, padding: 20, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE2EF' },
-  cardTitle: { color: '#0D1733', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
-  cardBody: { marginTop: 8, color: '#59657D', fontSize: 13, lineHeight: 19 },
-  primary: { marginTop: 12, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#0D1733' },
-  primaryText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  secondary: { marginTop: 10, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#F3B33D' },
-  secondaryText: { color: '#0D1733', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  qaButton: { marginTop: 10, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: '#E8ECF4', borderWidth: 1, borderColor: '#CBD3E3' },
-  qaButtonText: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
-  error: { marginTop: 8, color: '#B42318', fontSize: 11, lineHeight: 16 },
-  footer: { marginTop: 22 },
-  footerTitle: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 },
-  footerText: { marginTop: 4, color: '#7A8499', fontSize: 11, lineHeight: 16 },
-  header: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  scannerHeader: { paddingHorizontal: 20, paddingVertical: 8 },
-  back: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
-  headerLabel: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  root: { flex: 1, backgroundColor: '#F4F6FA' }, home: { flex: 1, padding: 24, justifyContent: 'center' }, eyebrow: { color: '#65718A', fontSize: 11, fontWeight: '900', letterSpacing: 2 }, title: { marginTop: 4, color: '#0D1733', fontSize: 30, fontWeight: '900', letterSpacing: 0.5 }, subtitle: { marginTop: 5, color: '#59657D', fontSize: 14 }, card: { marginTop: 28, padding: 20, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE2EF' }, cardTitle: { color: '#0D1733', fontSize: 14, fontWeight: '900', letterSpacing: 1 }, cardBody: { marginTop: 8, color: '#59657D', fontSize: 13, lineHeight: 19 }, primary: { marginTop: 12, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#0D1733' }, primaryText: { color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 1 }, secondary: { marginTop: 10, borderRadius: 14, paddingVertical: 16, alignItems: 'center', backgroundColor: '#F3B33D' }, secondaryText: { color: '#0D1733', fontSize: 12, fontWeight: '900', letterSpacing: 1 }, qaButton: { marginTop: 10, borderRadius: 14, paddingVertical: 14, alignItems: 'center', backgroundColor: '#E8ECF4', borderWidth: 1, borderColor: '#CBD3E3' }, qaButtonText: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 }, error: { marginTop: 8, color: '#B42318', fontSize: 11, lineHeight: 16 }, footer: { marginTop: 22 }, footerTitle: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.4 }, footerText: { marginTop: 4, color: '#7A8499', fontSize: 11, lineHeight: 16 }, header: { paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, scannerHeader: { paddingHorizontal: 20, paddingVertical: 8 }, back: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 }, headerLabel: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
 });
