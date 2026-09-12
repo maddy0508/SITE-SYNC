@@ -35,13 +35,38 @@ jobs:
       - name: Install JavaScript dependencies
         working-directory: sitesync
         run: npm ci --ignore-scripts
+      - name: Run full Jest suite
+        working-directory: sitesync
+        run: npm test -- --runInBand
+      - name: TypeScript check
+        working-directory: sitesync
+        run: npm run typecheck --if-present
+      - name: ESLint
+        working-directory: sitesync
+        run: npm run lint --if-present
       - name: Assemble physical M1.7 QA APK
         working-directory: sitesync/android
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
-      - name: Upload M1.7 QA APK
+      - name: Write APK provenance manifest
+        working-directory: sitesync
+        run: |
+          mkdir -p android/app/build/outputs/apk/release
+          cat > android/app/build/outputs/apk/release/SITE-SYNC-M1.7-QA-PROVENANCE.txt <<EOF
+          branch=${GITHUB_REF_NAME}
+          commit=${GITHUB_SHA}
+          workflow=${GITHUB_WORKFLOW}
+          run=${GITHUB_RUN_ID}
+          isolated_project=fuaiodkyaqfandbenuol
+          production_supabase_touched=false
+          runtime_acceptance_contract=MMM-57
+          repository_ui_contract=MMM-58
+          EOF
+      - name: Upload M1.7 QA APK and provenance
         uses: actions/upload-artifact@v4
         with:
           name: sitesync-m1.7-physical-qa-apk
-          path: sitesync/android/app/build/outputs/apk/release/*.apk
+          path: |
+            sitesync/android/app/build/outputs/apk/release/*.apk
+            sitesync/android/app/build/outputs/apk/release/SITE-SYNC-M1.7-QA-PROVENANCE.txt
           if-no-files-found: error
           retention-days: 7
