@@ -52,13 +52,17 @@ export class SupabaseSyncTransport implements SyncTransport {
       case 'ACCEPTED':
       case 'DUPLICATE_ACCEPTED': {
         const serverRevision = asRevision(response.server_revision);
-        if (serverRevision === null || response.result === undefined) return this.malformed('RPC_INVALID_SUCCESS');
+        const responseCommandId = asString(response.command_id);
+        if (serverRevision === null || response.result === undefined || responseCommandId !== request.command.commandId) {
+          return this.malformed('RPC_INVALID_SUCCESS');
+        }
         return { kind: status, serverRevision, result: response.result };
       }
       case 'REVISION_CONFLICT': {
         const serverRevision = asRevision(response.server_revision);
         const reasonCode = asString(response.reason_code);
-        if (serverRevision === null || !reasonCode) return this.malformed('RPC_INVALID_CONFLICT');
+        const responseCommandId = asString(response.command_id);
+        if (serverRevision === null || !reasonCode || responseCommandId !== request.command.commandId) return this.malformed('RPC_INVALID_CONFLICT');
         const aggregate = response.authoritative_aggregate;
         return {
           kind: 'REVISION_CONFLICT',
