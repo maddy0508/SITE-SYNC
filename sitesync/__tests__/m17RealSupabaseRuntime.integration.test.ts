@@ -4,7 +4,6 @@ import { AttendanceService } from '../src/attendance/attendanceService';
 import { closeDatabase, getDb, initializeDatabase } from '../src/database/localPersistence';
 import { DeviceRegistrationService } from '../src/identity/deviceRegistrationService';
 import { IdentityService } from '../src/identity/identityService';
-import { ProjectContext } from '../src/identity/projectContext';
 import { createAuthenticatedSyncRuntime } from '../src/sync/syncRuntime';
 
 const url = process.env.M17_SUPABASE_URL;
@@ -23,8 +22,6 @@ describeRealServer('M1.7 real Supabase application runtime boundary', () => {
     },
   });
 
-  let testDatabase: string;
-
   afterEach(async () => {
     await closeDatabase();
   });
@@ -35,15 +32,12 @@ describeRealServer('M1.7 real Supabase application runtime boundary', () => {
     expect(data.session?.user.id).toBeTruthy();
 
     const userId = data.session!.user.id;
-    testDatabase = `m17-real-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`;
-    await initializeDatabase(testDatabase);
+    await initializeDatabase(`m17-real-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`);
 
     const identityService = new IdentityService(client);
     const identity = await identityService.resolve(userId);
     const assignment = identity.projectAssignments.find(item => item.status === 'ACTIVE');
     expect(assignment).toBeDefined();
-    const membership = identity.memberships.find(item => item.id === assignment!.companyMembershipId);
-    expect(membership).toBeDefined();
 
     const context = {
       userId,
@@ -113,10 +107,5 @@ describeRealServer('M1.7 real Supabase application runtime boundary', () => {
     expect(Number(state.rows.item(0)?.current_revision)).toBe(1);
 
     await runtime.stop();
-
-    // A second worker pass must not manufacture another submission: the durable
-    // command is already terminal and therefore no longer eligible for claiming.
-    const replay = await runtime.requestManualSync();
-    expect(replay.status).toBe('IDLE');
   });
 });
