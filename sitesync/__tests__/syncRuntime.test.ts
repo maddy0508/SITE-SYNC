@@ -118,6 +118,8 @@ describe('SyncRuntime', () => {
 
     const startPromise = runtime.start();
     const stopPromise = runtime.stop();
+    await Promise.resolve();
+    await Promise.resolve();
     resolveWorker(w);
     await Promise.all([startPromise, stopPromise]);
 
