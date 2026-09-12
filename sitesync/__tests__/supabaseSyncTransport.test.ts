@@ -10,9 +10,9 @@ const request = {
 
 describe('SupabaseSyncTransport', () => {
   test.each([
-    ['ACCEPTED', { status: 'ACCEPTED', server_revision: 1, result: { state: 'CHECKED_IN' } }, 'ACCEPTED'],
-    ['DUPLICATE_ACCEPTED', { status: 'DUPLICATE_ACCEPTED', server_revision: 1, result: { state: 'CHECKED_IN' } }, 'DUPLICATE_ACCEPTED'],
-    ['REVISION_CONFLICT', { status: 'REVISION_CONFLICT', server_revision: 2, authoritative_aggregate: { state: 'CHECKED_OUT' }, reason_code: 'BASE_REVISION_MISMATCH' }, 'REVISION_CONFLICT'],
+    ['ACCEPTED', { status: 'ACCEPTED', command_id: 'cmd-1', server_revision: 1, result: { state: 'CHECKED_IN' } }, 'ACCEPTED'],
+    ['DUPLICATE_ACCEPTED', { status: 'DUPLICATE_ACCEPTED', command_id: 'cmd-1', server_revision: 1, result: { state: 'CHECKED_IN' } }, 'DUPLICATE_ACCEPTED'],
+    ['REVISION_CONFLICT', { status: 'REVISION_CONFLICT', command_id: 'cmd-1', server_revision: 2, authoritative_aggregate: { state: 'CHECKED_OUT' }, reason_code: 'BASE_REVISION_MISMATCH' }, 'REVISION_CONFLICT'],
     ['AUTHORIZATION_REJECTED', { status: 'AUTHORIZATION_REJECTED', code: 'NOT_AUTHORIZED', message: 'no' }, 'AUTHORIZATION_REJECTED'],
     ['VALIDATION_REJECTED', { status: 'VALIDATION_REJECTED', code: 'INVALID', message: 'bad' }, 'VALIDATION_REJECTED'],
     ['DEVICE_REVOKED', { status: 'DEVICE_REVOKED', code: 'DEVICE_REVOKED', message: 'revoked' }, 'DEVICE_REVOKED'],
@@ -42,7 +42,10 @@ describe('SupabaseSyncTransport', () => {
     null,
     {},
     { status: 'ACCEPTED' },
+    { status: 'ACCEPTED', command_id: 'cmd-other', server_revision: 1, result: {} },
+    { status: 'DUPLICATE_ACCEPTED', command_id: 'cmd-other', server_revision: 1, result: {} },
     { status: 'REVISION_CONFLICT', server_revision: 1 },
+    { status: 'REVISION_CONFLICT', command_id: 'cmd-other', server_revision: 1, reason_code: 'BASE_REVISION_MISMATCH' },
     { status: 'UNKNOWN' },
   ])('rejects malformed RPC response: %p', async data => {
     const rpc: SupabaseRpcClient = { rpc: jest.fn().mockResolvedValue({ data, error: null }) };
