@@ -10,15 +10,17 @@ function runtime() {
 }
 
 describe('SyncLifecycle', () => {
-  it('starts on mount and stops on dispose', async () => {
+  it('starts exactly once and stops on dispose', async () => {
     const r = runtime();
     const appState = { addEventListener: jest.fn(() => ({ remove: jest.fn() })) };
     const lifecycle = new SyncLifecycle(r, appState);
 
     await lifecycle.start();
+    await lifecycle.start();
     await lifecycle.dispose();
     expect(r.start).toHaveBeenCalledTimes(1);
     expect(r.stop).toHaveBeenCalledTimes(1);
+    expect(appState.addEventListener).toHaveBeenCalledTimes(1);
   });
 
   it('triggers a manual sync when the app returns to active', async () => {

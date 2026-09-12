@@ -18,6 +18,7 @@ export class SyncLifecycle {
   private removeNetworkSubscription: (() => void) | null = null;
   private removeAuthSubscription: (() => void) | null = null;
   private disposed = false;
+  private started = false;
   private wasOnline: boolean | null = null;
 
   constructor(
@@ -28,9 +29,10 @@ export class SyncLifecycle {
   ) {}
 
   async start(): Promise<void> {
-    if (this.disposed) return;
+    if (this.disposed || this.started) return;
     await this.runtime.start();
-    if (this.disposed) return;
+    if (this.disposed || this.started) return;
+    this.started = true;
 
     this.appStateSubscription = this.appState.addEventListener('change', state => {
       if (state === 'active' && !this.disposed) void this.runtime.requestManualSync();
@@ -56,6 +58,7 @@ export class SyncLifecycle {
   async dispose(): Promise<void> {
     if (this.disposed) return;
     this.disposed = true;
+    this.started = false;
     this.appStateSubscription?.remove();
     this.appStateSubscription = null;
     this.removeNetworkSubscription?.();
