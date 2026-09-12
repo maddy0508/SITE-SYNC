@@ -103,4 +103,25 @@ describe('SyncRuntime', () => {
     await runtime.requestManualSync();
     expect(w.requestSync).toHaveBeenCalledWith('MANUAL');
   });
+
+  it('does not start a worker that finishes construction after stop is requested', async () => {
+    const w = worker();
+    let resolveWorker!: (value: SyncRuntimeWorker) => void;
+    const createWorker: SyncRuntimeDependencies['createWorker'] = jest.fn(
+      () => new Promise(resolve => { resolveWorker = resolve; }),
+    );
+    const runtime = new SyncRuntime({
+      getAuthenticatedUserId: jest.fn(async () => 'user-1'),
+      getDeviceSession: jest.fn(async () => activeSession()),
+      createWorker,
+    });
+
+    const startPromise = runtime.start();
+    const stopPromise = runtime.stop();
+    resolveWorker(w);
+    await Promise.all([startPromise, stopPromise]);
+
+    expect(w.start).not.toHaveBeenCalled();
+    expect(w.stop).not.toHaveBeenCalled();
+  });
 });
