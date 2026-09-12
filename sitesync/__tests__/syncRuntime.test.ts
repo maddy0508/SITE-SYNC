@@ -1,13 +1,25 @@
-import { SyncRuntime } from '../src/sync/syncRuntime';
+import { SyncRuntime, type SyncRuntimeDependencies, type SyncRuntimeWorker } from '../src/sync/syncRuntime';
+import type { SyncRunResult, SyncTriggerReason } from '../src/sync/syncWorker';
 
 type Worker = {
-  start: jest.Mock<void, []>;
-  stop: jest.Mock<void, []>;
-  requestSync: jest.Mock<Promise<unknown>, [string]>;
+  start: jest.MockedFunction<SyncRuntimeWorker['start']>;
+  stop: jest.MockedFunction<SyncRuntimeWorker['stop']>;
+  requestSync: jest.MockedFunction<SyncRuntimeWorker['requestSync']>;
 };
 
 function worker(): Worker {
-  return { start: jest.fn(), stop: jest.fn(), requestSync: jest.fn(async () => ({ status: 'IDLE' })) };
+  return {
+    start: jest.fn(),
+    stop: jest.fn(),
+    requestSync: jest.fn(async (_reason: SyncTriggerReason): Promise<SyncRunResult> => ({ status: 'IDLE' })),
+  };
+}
+
+const activeSession = () => ({ status: 'ACTIVE' as const, deviceInstallationId: 'device-1' });
+const revokedSession = () => ({ status: 'REVOKED' as const, deviceInstallationId: 'device-1' });
+
+function createWorkerFactory(w: Worker): SyncRuntimeDependencies['createWorker'] {
+  return jest.fn(async (_userId: string, _deviceInstallationId: string): Promise<SyncRuntimeWorker> => w);
 }
 
 describe('SyncRuntime', () => {
@@ -15,8 +27,8 @@ describe('SyncRuntime', () => {
     const w = worker();
     const runtime = new SyncRuntime({
       getAuthenticatedUserId: jest.fn(async () => 'user-1'),
-      getDeviceSession: jest.fn(async () => ({ status: 'ACTIVE', deviceInstallationId: 'device-1' })),
-      createWorker: jest.fn(async () => w),
+      getDeviceSession: jest.fn(async () => activeSession()),
+      createWorker: createWorkerFactory(w),
     });
 
     await runtime.start();
@@ -29,7 +41,7 @@ describe('SyncRuntime', () => {
   });
 
   it('does not create a worker when authentication is unavailable', async () => {
-    const createWorker = jest.fn(async () => worker());
+    const createWorker = createWorkerFactory(worker());
     const runtime = new SyncRuntime({
       getAuthenticatedUserId: jest.fn(async () => null),
       createWorker,
@@ -40,8 +52,9 @@ describe('SyncRuntime', () => {
   });
 
   it('does not create a worker when the local device session is absent or revoked', async () => {
-    const createWorker = jest.fn(async () => worker());
-    const getDeviceSession = jest.fn(async () => null);
+    const createWorker = createWorkerFactory(worker());
+    let session: ReturnType<typeof activeSession> | ReturnType<typeof revokedSession> | null = null;
+    const getDeviceSession: NonNullable<SyncRuntimeDependencies['getDeviceSession']> = jest.fn(async () => session);
     const runtime = new SyncRuntime({
       getAuthenticatedUserId: jest.fn(async () => 'user-1'),
       getDeviceSession,
@@ -52,21 +65,21 @@ describe('SyncRuntime', () => {
     expect(getDeviceSession).toHaveBeenCalledWith('user-1');
     expect(createWorker).not.toHaveBeenCalled();
 
-    getDeviceSession.mockResolvedValue({ status: 'REVOKED', deviceInstallationId: 'device-1' });
+    session = revokedSession();
     await runtime.start();
     expect(createWorker).not.toHaveBeenCalled();
   });
 
   it('sources the worker from the authenticated user and active local device', async () => {
     const w = worker();
-    const createWorker = jest.fn(async (userId: string, deviceInstallationId: string) => {
+    const createWorker = jest.fn(async (userId: string, deviceInstallationId: string): Promise<SyncRuntimeWorker> => {
       expect(userId).toBe('user-1');
       expect(deviceInstallationId).toBe('device-1');
       return w;
     });
     const runtime = new SyncRuntime({
       getAuthenticatedUserId: jest.fn(async () => 'user-1'),
-      getDeviceSession: jest.fn(async () => ({ status: 'ACTIVE', deviceInstallationId: 'device-1' })),
+      getDeviceSession: jest.fn(async () => activeSession()),
       createWorker,
     });
 
@@ -79,8 +92,8 @@ describe('SyncRuntime', () => {
     const w = worker();
     const runtime = new SyncRuntime({
       getAuthenticatedUserId: jest.fn(async () => 'user-1'),
-      getDeviceSession: jest.fn(async () => ({ status: 'ACTIVE', deviceInstallationId: 'device-1' })),
-      createWorker: jest.fn(async () => w),
+      getDeviceSession: jest.fn(async () => activeSession()),
+      createWorker: createWorkerFactory(w),
     });
 
     expect(await runtime.requestManualSync()).toEqual({ status: 'IDLE' });
