@@ -19,20 +19,21 @@ const defaultGetDeviceSession = async (userId: string) => getLocalDeviceSession(
 /**
  * Owns the application-level lifetime of the sync worker.
  *
- * The runtime deliberately refuses to construct a worker without both an
- * authenticated user and an ACTIVE locally registered device. The device ID
- * is therefore sourced from local persistence and cannot originate in UI
- * input or arbitrary caller data.
+ * A worker is created only after both an authenticated user and an ACTIVE
+ * locally registered device have been resolved. The device installation ID
+ * therefore cannot originate in UI input or arbitrary caller data.
  */
 export class SyncRuntime {
   private worker: SyncRuntimeWorker | null = null;
   private starting: Promise<void> | null = null;
+  private lifecycleGeneration = 0;
 
   constructor(private readonly dependencies: SyncRuntimeDependencies) {}
 
   async start(): Promise<void> {
     if (this.worker || this.starting) return this.starting ?? Promise.resolve();
-    this.starting = this.initialize();
+    const generation = ++this.lifecycleGeneration;
+    this.starting = this.initialize(generation);
     try {
       await this.starting;
     } finally {
@@ -41,6 +42,7 @@ export class SyncRuntime {
   }
 
   async stop(): Promise<void> {
+    ++this.lifecycleGeneration;
     const pendingStart = this.starting;
     if (pendingStart) await pendingStart;
     const worker = this.worker;
@@ -56,15 +58,16 @@ export class SyncRuntime {
     return this.worker?.requestSync('NETWORK_RESTORED') ?? { status: 'IDLE' };
   }
 
-  private async initialize(): Promise<void> {
+  private async initialize(generation: number): Promise<void> {
     const userId = await (this.dependencies.getAuthenticatedUserId?.() ?? Promise.resolve(null));
-    if (!userId) return;
+    if (!userId || generation !== this.lifecycleGeneration) return;
 
     const getDeviceSession = this.dependencies.getDeviceSession ?? defaultGetDeviceSession;
     const deviceSession = await getDeviceSession(userId);
-    if (!deviceSession || deviceSession.status !== 'ACTIVE' || !deviceSession.deviceInstallationId) return;
+    if (!deviceSession || deviceSession.status !== 'ACTIVE' || !deviceSession.deviceInstallationId || generation !== this.lifecycleGeneration) return;
 
     const worker = await this.dependencies.createWorker(userId, deviceSession.deviceInstallationId);
+    if (generation !== this.lifecycleGeneration) return;
     this.worker = worker;
     worker.start();
   }
