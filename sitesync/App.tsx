@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppState, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
@@ -14,7 +14,6 @@ import type { SyncRuntime } from './src/sync/syncRuntime';
 import { AuthService } from './src/auth/authService';
 import { createAuthenticatedSyncRuntime } from './src/sync/syncRuntime';
 import { createM17SupabaseClient } from './src/supabase/m17SupabaseClient';
-import { initializeDatabase } from './src/database/localPersistence';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -23,7 +22,6 @@ const PERSON_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const PROJECT_ID = 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
 const COMPANY_ID = 'company-1';
 const MEMBERSHIP_ID = 'membership-1';
-const M17_DATABASE_NAME = 'm17-real-runtime-device.db';
 
 const applicationContext: ApplicationContext = {
   userId: USER_ID,
@@ -106,31 +104,29 @@ interface M17Composition {
 
 export default function App({ syncLifecycle }: AppProps = {}) {
   const [screen, setScreen] = useState<Screen>('home');
-  const m17 = useMemo<M17Composition | null>(() => {
-    if (syncLifecycle) return null;
-    const client = createM17SupabaseClient();
-    const authService = new AuthService(client);
-    const runtime = createAuthenticatedSyncRuntime(authService, client);
-    const lifecycle = new DefaultSyncLifecycle(runtime, AppState, undefined, authService);
-    return { client, authService, runtime, lifecycle };
+  const [m17, setM17] = useState<M17Composition | null>(null);
+
+  useEffect(() => {
+    if (!syncLifecycle) return undefined;
+    void syncLifecycle.start();
+    return () => { void syncLifecycle.dispose(); };
   }, [syncLifecycle]);
 
   useEffect(() => {
-    if (syncLifecycle) {
-      void syncLifecycle.start();
-      return () => { void syncLifecycle.dispose(); };
-    }
+    if (screen !== 'm17qa' || !m17) return undefined;
+    return () => { void m17.lifecycle.dispose(); };
+  }, [m17, screen]);
 
-    if (!m17) return undefined;
-    let cancelled = false;
-    void initializeDatabase(M17_DATABASE_NAME).then(() => {
-      if (!cancelled) void m17.lifecycle.start();
-    });
-    return () => {
-      cancelled = true;
-      void m17.lifecycle.dispose();
-    };
-  }, [m17, syncLifecycle]);
+  const openM17Qa = () => {
+    if (!m17) {
+      const client = createM17SupabaseClient();
+      const authService = new AuthService(client);
+      const runtime = createAuthenticatedSyncRuntime(authService, client);
+      const lifecycle = new DefaultSyncLifecycle(runtime, AppState, undefined, authService);
+      setM17({ client, authService, runtime, lifecycle });
+    }
+    setScreen('m17qa');
+  };
 
   if (screen === 'workerQr') {
     return (
@@ -207,7 +203,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
           <Text style={styles.cardBody}>M1.6 exercises local check-in/check-out, durable command history, restart persistence and transactional rollback without touching production Supabase.</Text>
         </View>
 
-        <Pressable style={styles.primary} onPress={() => setScreen('m17qa')}>
+        <Pressable style={styles.primary} onPress={openM17Qa}>
           <Text style={styles.primaryText}>RUN M1.7 REAL RUNTIME QA</Text>
         </Pressable>
         <Pressable style={styles.primary} onPress={() => setScreen('m16qa')}>
