@@ -1,0 +1,44 @@
+name: M1.7 real runtime verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'm17-real-app-runtime'
+    paths:
+      - 'sitesync/src/**'
+      - 'sitesync/__tests__/m17RealSupabaseRuntime.integration.test.ts'
+      - 'sitesync/package.json'
+      - 'sitesync/package-lock.json'
+      - '.github/workflows/m17-real-runtime-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  real-supabase-runtime:
+    # Credentials are deliberately supplied through GitHub Actions secrets.
+    # The job is skipped when the isolated test credentials have not yet been
+    # configured; no production credential or production Supabase project is
+    # permitted here.
+    if: ${{ secrets.M17_SUPABASE_EMAIL != '' && secrets.M17_SUPABASE_PASSWORD != '' && secrets.M17_SUPABASE_PUBLISHABLE_KEY != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sitesync
+    env:
+      M17_SUPABASE_URL: https://fuaiodkyaqfandbenuol.supabase.co
+      M17_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.M17_SUPABASE_PUBLISHABLE_KEY }}
+      M17_SUPABASE_EMAIL: ${{ secrets.M17_SUPABASE_EMAIL }}
+      M17_SUPABASE_PASSWORD: ${{ secrets.M17_SUPABASE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Run real Supabase runtime boundary
+        run: npx jest __tests__/m17RealSupabaseRuntime.integration.test.ts --runInBand --forceExit
