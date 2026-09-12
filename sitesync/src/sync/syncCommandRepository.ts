@@ -2,6 +2,7 @@ import type { CommandLedgerRecord } from '../domain/localPersistence';
 import { STALE_PROCESSING_THRESHOLD_MS, canTransitionCommand } from '../domain/localPersistence';
 import { getDb, withTransaction } from '../database/localPersistence';
 import type { Transaction } from '../database/sqliteAdapter';
+import { emitRepositoryChange } from '../database/repositoryChangeBus';
 
 export interface ClaimedSyncCommand extends CommandLedgerRecord { commandPayloadJson: string; }
 type SqlFieldValue = string | number | null;
@@ -76,6 +77,7 @@ export class SyncCommandRepository {
   }
 
   async markSucceeded(commandId: string, now: string, serverRevision: number, result: unknown): Promise<void> {
+    const command = await this.getCommand(commandId);
     await withTransaction(async (tx) => {
       const current = await this.getCommandInTransaction(tx, commandId);
       await this.transitionInTransaction(tx, current, 'SUCCEEDED', {
@@ -92,15 +94,21 @@ export class SyncCommandRepository {
         [serverRevision, now, commandId, commandId],
       );
     });
+    emitRepositoryChange({ kind: 'command', projectId: command.projectId, personId: command.personId, commandId, at: now });
+    emitRepositoryChange({ kind: 'attendance', projectId: command.projectId, personId: command.personId, commandId, at: now });
+    emitRepositoryChange({ kind: 'timesheet', projectId: command.projectId, personId: command.personId, commandId, at: now });
   }
 
   async markRetryableFailure(commandId: string, now: string, nextRetryAt: string, code: string, diagnostics: string): Promise<void> {
+    const command = await this.getCommand(commandId);
     await this.transition(commandId, 'RETRYABLE_FAILURE', {
       serverRespondedAt: now, nextRetryAt, serverErrorCode: code, failureDiagnostics: diagnostics, updatedAt: now,
     });
+    emitRepositoryChange({ kind: 'command', projectId: command.projectId, personId: command.personId, commandId, at: now });
   }
 
   async markFailed(commandId: string, now: string, code: string, diagnostics: string): Promise<void> {
+    const command = await this.getCommand(commandId);
     await withTransaction(async (tx) => {
       const current = await this.getCommandInTransaction(tx, commandId);
       await this.transitionInTransaction(tx, current, 'FAILED', {
@@ -114,12 +122,16 @@ export class SyncCommandRepository {
         [now, commandId, commandId],
       );
     });
+    emitRepositoryChange({ kind: 'command', projectId: command.projectId, personId: command.personId, commandId, at: now });
+    emitRepositoryChange({ kind: 'attendance', projectId: command.projectId, personId: command.personId, commandId, at: now });
+    emitRepositoryChange({ kind: 'timesheet', projectId: command.projectId, personId: command.personId, commandId, at: now });
   }
 
   async markConflict(commandId: string, now: string, serverRevision: number, serverPayload: string | null, reasonCode: string): Promise<void> {
+    const command = await this.getCommand(commandId);
     await withTransaction(async (tx) => {
-      const command = await this.getCommandInTransaction(tx, commandId);
-      await this.transitionInTransaction(tx, command, 'CONFLICT', {
+      const current = await this.getCommandInTransaction(tx, commandId);
+      await this.transitionInTransaction(tx, current, 'CONFLICT', {
         serverRespondedAt: now, serverErrorCode: reasonCode, failureDiagnostics: reasonCode, updatedAt: now,
       });
       const conflictId = `conflict-${commandId}`;
@@ -143,6 +155,14 @@ export class SyncCommandRepository {
         [serverRevision, now, command.projectId, command.personId, commandId, commandId],
       );
     });
+    emitRepositoryChange({ kind: 'command', projectId: command.projectId, personId: command.personId, commandId, at: now });
+    emitRepositoryChange({ kind: 'attendance', projectId: command.projectId, personId: command.personId, commandId, at: now });
+    emitRepositoryChange({ kind: 'timesheet', projectId: command.projectId, personId: command.personId, commandId, at: now });
+    emitRepositoryChange({ kind: 'conflict', projectId: command.projectId, personId: command.personId, commandId, at: now });
+  }
+
+  private async getCommand(commandId: string): Promise<ClaimedSyncCommand> {
+    return this.getCommandInTransaction({ executeSql: (...args: any[]) => getDb().executeSql(...args) } as Transaction, commandId);
   }
 
   private async getCommandInTransaction(tx: Transaction, commandId: string): Promise<ClaimedSyncCommand> {
