@@ -41,4 +41,4 @@ jobs:
           cache-dependency-path: sitesync/package-lock.json
       - run: npm ci --ignore-scripts
       - name: Run real Supabase runtime boundary
-        run: npx jest __tests__/m17RealSupabaseRuntime.integration.test.ts --runInBand --forceExit
+        run: npx jest __tests__/m17RealSupabaseRuntime.integration.test.ts --runInBand
