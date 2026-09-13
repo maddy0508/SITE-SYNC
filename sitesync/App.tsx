@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { AppState, BackHandler, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
@@ -81,12 +81,12 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     return () => { void syncLifecycle.dispose(); };
   }, [syncLifecycle]);
 
-  const exitM17 = async () => {
+  const exitM17 = useCallback(async () => {
     if (m17) await m17.lifecycle.dispose().catch(() => undefined);
     setM17(null);
     setM17QaScreen(null);
     setScreen('home');
-  };
+  }, [m17]);
 
   useEffect(() => {
     if (screen !== 'm17provision' && screen !== 'm17qa') return undefined;
@@ -95,7 +95,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
       return true;
     });
     return () => subscription.remove();
-  }, [screen, m17]);
+  }, [screen, exitM17]);
 
   const openM17Qa = async () => {
     setM17Loading(true);
