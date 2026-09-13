@@ -235,7 +235,7 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
       }
       const authoritative = result.authoritative_aggregate as Record<string, unknown> | undefined;
       const serverRevision = Number(result.server_revision);
-      const local = await getDb().execute(`SELECT state, current_revision, server_revision FROM attendance_state WHERE project_id=? AND person_id=? ORDER BY work_date_utc DESC LIMIT 1`, [String(row.project_id), String(row.person.id)]);
+      const local = await getDb().execute(`SELECT state, current_revision, server_revision FROM attendance_state WHERE project_id=? AND person_id=? ORDER BY work_date_utc DESC LIMIT 1`, [String(row.project_id), String(row.person_id)]);
       const localRow = local.rows.length ? local.rows.item(0) as Record<string, unknown> : null;
       const serverWins = Boolean(authoritative?.state) && localRow && Number(localRow.server_revision ?? 0) === serverRevision;
       setResult(10, serverWins ? 'PASS' : 'NOT_PROVEN', `Authoritative conflict returned revision ${serverRevision}; local server revision is ${String(localRow?.server_revision ?? 'null')}.`);
