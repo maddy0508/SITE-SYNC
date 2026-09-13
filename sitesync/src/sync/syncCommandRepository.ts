@@ -172,6 +172,15 @@ export class SyncCommandRepository {
         [conflictId, serverRevision, serverPayload, reasonCode, now, now, commandId],
       );
 
+      await tx.executeSql(`UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`, [serverRevision, now, commandId]);
+      await tx.executeSql(
+        `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=?
+         WHERE (project_id, person_id, work_date_utc) IN (
+           SELECT project_id, person_id, work_date_utc FROM attendance_event WHERE command_id=?
+         )`,
+        [serverRevision, now, commandId],
+      );
+
       const authoritative = parseAuthoritativeAttendancePayload(serverPayload);
       if (authoritative) {
         const resolvedRevision = authoritative.serverRevision ?? serverRevision;
@@ -181,17 +190,8 @@ export class SyncCommandRepository {
                current_revision=?, server_revision=?, sync_status='CONFLICT',
                last_client_occurred_at=COALESCE(?, last_client_occurred_at), updated_at=?
            WHERE last_command_id=?`,
-          [
-            authoritative.state,
-            authoritative.firstInUtc,
-            authoritative.lastOutUtc,
-            authoritative.totalMinutes,
-            resolvedRevision,
-            resolvedRevision,
-            authoritative.lastOutUtc ?? authoritative.firstInUtc,
-            now,
-            commandId,
-          ],
+          [authoritative.state, authoritative.firstInUtc, authoritative.lastOutUtc, authoritative.totalMinutes,
+            resolvedRevision, resolvedRevision, authoritative.lastOutUtc ?? authoritative.firstInUtc, now, commandId],
         );
         await tx.executeSql(
           `UPDATE timesheet
@@ -200,19 +200,9 @@ export class SyncCommandRepository {
                source_state_revision=?, sync_status='CONFLICT', server_revision=?, updated_at=?
            WHERE project_id=? AND person_id=?
              AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)`,
-          [
-            authoritative.firstInUtc,
-            authoritative.lastOutUtc,
-            authoritative.totalMinutes,
-            authoritative.firstInUtc,
-            authoritative.lastOutUtc,
-            resolvedRevision,
-            resolvedRevision,
-            now,
-            command.projectId,
-            command.personId,
-            commandId,
-          ],
+          [authoritative.firstInUtc, authoritative.lastOutUtc, authoritative.totalMinutes,
+            authoritative.firstInUtc, authoritative.lastOutUtc, resolvedRevision, resolvedRevision, now,
+            command.projectId, command.personId, commandId],
         );
       }
     });
@@ -245,7 +235,6 @@ export class SyncCommandRepository {
     if (!canTransitionCommand(current.status, to)) throw new Error(`Invalid command transition ${current.status} -> ${to}`);
     const entries = Object.entries(fields);
     const setClause = entries.map(([key]) => `${key.replace(/[A-Z]/g, match => `_${match.toLowerCase()}`)}=?`).join(', ');
-    await tx.executeSql(`UPDATE command_ledger SET status=?, ${setClause} WHERE command_id=?`,
-      [to, ...entries.map(([, value]) => value), current.commandId]);
+    await tx.executeSql(`UPDATE command_ledger SET status=?, ${setClause} WHERE command_id=?`, [to, ...entries.map(([, value]) => value), current.commandId]);
   }
 }
