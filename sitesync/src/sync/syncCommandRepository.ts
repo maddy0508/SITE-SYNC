@@ -7,6 +7,31 @@ import { emitRepositoryChange } from '../database/repositoryChangeBus';
 export interface ClaimedSyncCommand extends CommandLedgerRecord { commandPayloadJson: string; }
 type SqlFieldValue = string | number | null;
 
+type AuthoritativeAttendancePayload = {
+  state?: 'CHECKED_IN' | 'CHECKED_OUT';
+  firstInUtc?: string | null;
+  lastOutUtc?: string | null;
+  totalMinutes?: number | null;
+  serverRevision?: number;
+};
+
+function parseAuthoritativeAttendancePayload(payload: string | null): AuthoritativeAttendancePayload | null {
+  if (!payload) return null;
+  try {
+    const value = JSON.parse(payload) as Record<string, unknown>;
+    if (value.state !== 'CHECKED_IN' && value.state !== 'CHECKED_OUT') return null;
+    return {
+      state: value.state,
+      firstInUtc: typeof value.firstInUtc === 'string' ? value.firstInUtc : null,
+      lastOutUtc: typeof value.lastOutUtc === 'string' ? value.lastOutUtc : null,
+      totalMinutes: typeof value.totalMinutes === 'number' ? value.totalMinutes : null,
+      serverRevision: typeof value.serverRevision === 'number' ? value.serverRevision : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function mapCommand(row: Record<string, unknown>): ClaimedSyncCommand {
   return {
     commandId: String(row.commandId), projectId: String(row.projectId), personId: String(row.personId),
@@ -146,14 +171,50 @@ export class SyncCommandRepository {
          FROM command_ledger WHERE command_id=?`,
         [conflictId, serverRevision, serverPayload, reasonCode, now, now, commandId],
       );
-      await tx.executeSql(`UPDATE attendance_state SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE last_command_id=?`,
-        [serverRevision, now, commandId]);
-      await tx.executeSql(
-        `UPDATE timesheet SET sync_status='CONFLICT', server_revision=?, updated_at=? WHERE project_id=? AND person_id=?
-         AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)
-         AND source_state_revision=(SELECT base_revision + 1 FROM command_ledger WHERE command_id=?)`,
-        [serverRevision, now, command.projectId, command.personId, commandId, commandId],
-      );
+
+      const authoritative = parseAuthoritativeAttendancePayload(serverPayload);
+      if (authoritative) {
+        const resolvedRevision = authoritative.serverRevision ?? serverRevision;
+        await tx.executeSql(
+          `UPDATE attendance_state
+           SET state=?, first_in_utc=?, last_out_utc=?, total_minutes=?,
+               current_revision=?, server_revision=?, sync_status='CONFLICT',
+               last_client_occurred_at=COALESCE(?, last_client_occurred_at), updated_at=?
+           WHERE last_command_id=?`,
+          [
+            authoritative.state,
+            authoritative.firstInUtc,
+            authoritative.lastOutUtc,
+            authoritative.totalMinutes,
+            resolvedRevision,
+            resolvedRevision,
+            authoritative.lastOutUtc ?? authoritative.firstInUtc,
+            now,
+            commandId,
+          ],
+        );
+        await tx.executeSql(
+          `UPDATE timesheet
+           SET first_in_utc=?, last_out_utc=?, total_minutes=?,
+               status=CASE WHEN ? IS NOT NULL AND ? IS NOT NULL THEN 'COMPLETE' ELSE 'INCOMPLETE' END,
+               source_state_revision=?, sync_status='CONFLICT', server_revision=?, updated_at=?
+           WHERE project_id=? AND person_id=?
+             AND work_date_utc=(SELECT work_date_utc FROM attendance_event WHERE command_id=? LIMIT 1)`,
+          [
+            authoritative.firstInUtc,
+            authoritative.lastOutUtc,
+            authoritative.totalMinutes,
+            authoritative.firstInUtc,
+            authoritative.lastOutUtc,
+            resolvedRevision,
+            resolvedRevision,
+            now,
+            command.projectId,
+            command.personId,
+            commandId,
+          ],
+        );
+      }
     });
     emitRepositoryChange({ kind: 'command', projectId: command.projectId, personId: command.personId, commandId, at: now });
     emitRepositoryChange({ kind: 'attendance', projectId: command.projectId, personId: command.personId, commandId, at: now });
