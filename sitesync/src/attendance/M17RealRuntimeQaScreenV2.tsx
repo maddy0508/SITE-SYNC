@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { AuthService } from '../auth/authService';
 import { AttendanceService } from './attendanceService';
@@ -43,13 +43,13 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
   const [observedCommandId, setObservedCommandId] = useState<string | null>(null);
   const [restartRecovered, setRestartRecovered] = useState(false);
 
-  const setResult = (gate: keyof typeof results, statusValue: QaEvidenceStatus, detail: string) => {
+  const setResult = useCallback((gate: keyof typeof results, statusValue: QaEvidenceStatus, detail: string) => {
     const evidence = createQaEvidence(statusValue, detail);
     setResults(previous => ({ ...previous, [gate]: { status: evidence.status, detail: evidence.detail } }));
     setStatus(`GATE ${String(gate)} · ${evidence.status} · ${detail}`);
-  };
+  }, []);
 
-  const refreshLocalState = async () => {
+  const refreshLocalState = useCallback(async () => {
     try {
       const result = await getDb().execute(`SELECT s.state, s.current_revision, s.server_revision, s.sync_status, (SELECT COUNT(*) FROM command_ledger c WHERE c.project_id=s.project_id AND c.person_id=s.person_id AND c.status IN ('PENDING','PROCESSING','RETRYABLE_FAILURE')) AS pending_commands, (SELECT status FROM command_ledger c WHERE c.project_id=s.project_id AND c.person_id=s.person_id ORDER BY c.created_at DESC LIMIT 1) AS last_command_status FROM attendance_state s ORDER BY s.updated_at DESC LIMIT 1`);
       if (!result.rows.length) { setLocalState('No attendance state'); return; }
@@ -58,9 +58,9 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
     } catch (error) {
       setLocalState(error instanceof Error ? error.message : String(error));
     }
-  };
+  }, []);
 
-  const resolveAuthenticatedContext = async () => {
+  const resolveAuthenticatedContext = useCallback(async () => {
     const session = await authService.restoreSession();
     const identityService = new IdentityService(client);
     const identity = await identityService.resolve(session.user.id);
@@ -91,7 +91,7 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
     });
     setResult(1, 'PASS', `Authenticated ${resolved.person.displayName}; active project ${assignment.projectId}; active device ${installation.deviceInstallationId}`);
     await runtime.start();
-  };
+  }, [authService, client, runtime, setResult]);
 
   useEffect(() => {
     let mounted = true;
@@ -134,7 +134,7 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
       unsubscribe();
       void runtime.stop().finally(() => closeDatabase().catch(() => undefined));
     };
-  }, [runtime]);
+  }, [refreshLocalState, resolveAuthenticatedContext, runtime, setResult]);
 
   const createOfflineCheckIn = async () => {
     if (!context || !dbReady) return;
@@ -235,7 +235,7 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
       }
       const authoritative = result.authoritative_aggregate as Record<string, unknown> | undefined;
       const serverRevision = Number(result.server_revision);
-      const local = await getDb().execute(`SELECT state, current_revision, server_revision FROM attendance_state WHERE project_id=? AND person_id=? ORDER BY work_date_utc DESC LIMIT 1`, [String(row.project_id), String(row.person_id)]);
+      const local = await getDb().execute(`SELECT state, current_revision, server_revision FROM attendance_state WHERE project_id=? AND person_id=? ORDER BY work_date_utc DESC LIMIT 1`, [String(row.project_id), String(row.person.id)]);
       const localRow = local.rows.length ? local.rows.item(0) as Record<string, unknown> : null;
       const serverWins = Boolean(authoritative?.state) && localRow && Number(localRow.server_revision ?? 0) === serverRevision;
       setResult(10, serverWins ? 'PASS' : 'NOT_PROVEN', `Authoritative conflict returned revision ${serverRevision}; local server revision is ${String(localRow?.server_revision ?? 'null')}.`);
