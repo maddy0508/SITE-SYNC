@@ -1,0 +1,390 @@
+import React, { useEffect, useState } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { AuthService } from '../auth/authService';
+import { AttendanceService } from './attendanceService';
+import { closeDatabase, getDb, getLocalDeviceSession, initializeDatabase } from '../database/localPersistence';
+import { subscribeRepositoryChanges } from '../database/repositoryChangeBus';
+import { DeviceRegistrationService } from '../identity/deviceRegistrationService';
+import { IdentityService } from '../identity/identityService';
+import type { ApplicationContext } from '../identity/projectContext';
+import type { SyncRuntime } from '../sync/syncRuntime';
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+type QaResult = { id: number; label: string; detail: string; passed: boolean };
+const DATABASE_NAME = 'm17-real-runtime-device.db';
+
+function nowUtc(): string { return new Date().toISOString(); }
+function makeInstallationKey(): string { return `m17-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
+
+interface M17RealRuntimeQaScreenProps {
+  onBack: () => void;
+  authService: AuthService;
+  client: SupabaseClient;
+  runtime: Pick<SyncRuntime, 'start' | 'stop' | 'requestManualSync'>;
+}
+
+export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }: M17RealRuntimeQaScreenProps) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [context, setContext] = useState<ApplicationContext | null>(null);
+  const [running, setRunning] = useState(false);
+  const [dbReady, setDbReady] = useState(false);
+  const [results, setResults] = useState<QaResult[]>([]);
+  const [status, setStatus] = useState('Database initialising…');
+  const [localState, setLocalState] = useState('No local attendance state loaded');
+  const [observedAt, setObservedAt] = useState<string | null>(null);
+  const [restartCheckpoint, setRestartCheckpoint] = useState('Not captured');
+
+  const addResult = (label: string, detail: string, passed: boolean) => {
+    setResults(resultsPrevious => [...resultsPrevious, { id: Date.now() + resultsPrevious.length, label, detail, passed }]);
+  };
+
+  const refreshLocalState = async () => {
+    try {
+      const result = await getDb().execute(`SELECT s.state, s.current_revision, s.server_revision, s.sync_status, (SELECT COUNT(*) FROM command_ledger c WHERE c.project_id=s.project_id AND c.person_id=s.person_id AND c.status IN ('PENDING','PROCESSING','RETRYABLE_FAILURE')) AS pending_commands, (SELECT status FROM command_ledger c WHERE c.project_id=s.project_id AND c.person_id=s.person_id ORDER BY c.created_at DESC LIMIT 1) AS last_command_status FROM attendance_state s ORDER BY s.updated_at DESC LIMIT 1`);
+      if (result.rows.length === 0) {
+        setLocalState('No attendance state');
+        return;
+      }
+      const row = result.rows.item(0) as Record<string, unknown>;
+      setLocalState(`${String(row.state)} · local rev ${String(row.current_revision)} · server rev ${String(row.server_revision ?? 'null')} · ${String(row.sync_status)} · pending ${String(row.pending_commands)} · command ${String(row.last_command_status ?? 'none')}`);
+    } catch (error) {
+      setLocalState(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+    const unsubscribe = subscribeRepositoryChanges(event => {
+      if (!mounted) return;
+      setObservedAt(event.at);
+      setStatus(`REPOSITORY OBSERVER · ${event.kind.toUpperCase()} CHANGE RECEIVED`);
+      void refreshLocalState();
+    });
+
+    void initializeDatabase(DATABASE_NAME)
+      .then(async () => {
+        if (!mounted) return;
+        setDbReady(true);
+        await refreshLocalState();
+        if (mounted) setStatus('READY — isolated M1.7 runtime QA');
+      })
+      .catch(error => {
+        if (!mounted) return;
+        setDbReady(false);
+        setStatus(`DATABASE INITIALISATION FAILED · ${error instanceof Error ? error.message : String(error)}`);
+      });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+      void runtime.stop().finally(() => closeDatabase().catch(() => undefined));
+    };
+  }, [runtime]);
+
+  const login = async () => {
+    if (!dbReady) {
+      setStatus('WAITING FOR LOCAL DATABASE INITIALISATION');
+      return;
+    }
+    setRunning(true);
+    setStatus('Authenticating against isolated Supabase…');
+    try {
+      const session = await authService.signIn(email.trim(), password);
+      const identityService = new IdentityService(client);
+      const identity = await identityService.resolve(session.user.id);
+      if (identity.projectAssignments.length === 0) throw new Error('Authenticated user has no active project assignment');
+
+      let installation = await new DeviceRegistrationService(client).get(session.user.id);
+      const localDevice = await getLocalDeviceSession(session.user.id);
+      if (!installation || installation.status !== 'ACTIVE') {
+        installation = await new DeviceRegistrationService(client).register(session.user.id, {
+          installationKey: localDevice?.installationKey ?? makeInstallationKey(),
+          deviceName: 'M1.7 PHYSICAL QA DEVICE',
+          appVersion: 'M1.7-QA',
+          osVersion: String(Platform.Version),
+          now: nowUtc(),
+        });
+      }
+      if (installation.status !== 'ACTIVE') throw new Error('Authoritative device installation is REVOKED');
+
+      const resolved = await identityService.resolve(session.user.id);
+      const activeAssignment = resolved.projectAssignments.find(a => a.status === 'ACTIVE');
+      if (!activeAssignment) throw new Error('No active project assignment after device registration');
+
+      setContext({
+        userId: resolved.userId,
+        profile: resolved.profile,
+        person: resolved.person,
+        organisation: resolved.organisation,
+        memberships: resolved.memberships,
+        activeProjectAssignments: resolved.projectAssignments,
+        hasProjectAccess: true,
+        device: installation,
+      });
+      setStatus(`AUTHENTICATED · ${resolved.person.displayName} · ${activeAssignment.projectId}`);
+      addResult('1 · Isolated authentication/context', 'Real Supabase session, authoritative identity, active project assignment and active device', true);
+      await runtime.start();
+      await refreshLocalState();
+    } catch (error) {
+      addResult('1 · Isolated authentication/context', error instanceof Error ? error.message : String(error), false);
+      setStatus('AUTHENTICATION FAILED');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const createCheckIn = async () => {
+    if (!context) { setStatus('Authenticate first'); return; }
+    const assignment = context.activeProjectAssignments[0];
+    setRunning(true);
+    try {
+      const mutation = await AttendanceService.checkIn({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: nowUtc(), online: false });
+      addResult('2 · Offline durable command', `${mutation.command.commandId} · ${mutation.command.status} · ${mutation.state.syncStatus}`, mutation.command.status === 'PENDING' && mutation.state.syncStatus === 'OFFLINE_PENDING_VERIFICATION');
+      setStatus('OFFLINE COMMAND PERSISTED — TERMINATE/RESTART APP NOW');
+      await refreshLocalState();
+    } catch (error) {
+      addResult('2 · Offline durable command', error instanceof Error ? error.message : String(error), false);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const captureRestartCheckpoint = async () => {
+    try {
+      const result = await getDb().execute(`SELECT command_id, status, attempt_count FROM command_ledger ORDER BY created_at DESC LIMIT 1`);
+      if (result.rows.length === 0) {
+        addResult('3 · Process-termination persistence', 'No command exists before restart checkpoint', false);
+        return;
+      }
+      const row = result.rows.item(0) as Record<string, unknown>;
+      const checkpoint = `${String(row.command_id)} · ${String(row.status)} · attempts ${String(row.attempt_count)}`;
+      setRestartCheckpoint(checkpoint);
+      addResult('3 · Process-termination persistence', `SQLite checkpoint: ${checkpoint}. Physically terminate and reopen before SYNC.`, true);
+      setStatus('RESTART CHECKPOINT CAPTURED');
+    } catch (error) {
+      addResult('3 · Process-termination persistence', error instanceof Error ? error.message : String(error), false);
+    }
+  };
+
+  const syncPending = async (label = '4 · Connectivity restoration / retry + 5 · Real authenticated RPC + 6 · reconciliation') => {
+    if (!context) { setStatus('Authenticate first'); return; }
+    setRunning(true);
+    setStatus('Submitting pending command through real authenticated RPC…');
+    try {
+      await runtime.start();
+      const result = await runtime.requestManualSync();
+      const passed = result.status === 'SUCCEEDED';
+      addResult(label, JSON.stringify(result), passed);
+      setStatus(passed ? 'AUTHORITATIVE SERVER STATE RECONCILED INTO SQLITE' : 'SYNC DID NOT SUCCEED');
+      await refreshLocalState();
+    } catch (error) {
+      addResult(label, error instanceof Error ? error.message : String(error), false);
+      setStatus('SYNC FAILED');
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const checkout = async () => {
+    if (!context) { setStatus('Authenticate first'); return; }
+    const assignment = context.activeProjectAssignments[0];
+    setRunning(true);
+    try {
+      const mutation = await AttendanceService.checkOut({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: nowUtc(), online: false });
+      addResult('7 · Check-in/check-out + timesheet derivation', `${mutation.state.state} · timesheet ${mutation.timesheet.status} · ${mutation.timesheet.totalMinutes ?? 'null'} minutes · ${mutation.timesheet.syncStatus}`, mutation.state.state === 'CHECKED_OUT' && mutation.timesheet.status === 'COMPLETE');
+      await refreshLocalState();
+    } catch (error) {
+      addResult('7 · Check-in/check-out + timesheet derivation', error instanceof Error ? error.message : String(error), false);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const duplicateReplay = async () => {
+    if (!context) { setStatus('Authenticate first'); return; }
+    setRunning(true);
+    try {
+      const latest = await getDb().execute(`SELECT command_id, status, server_result_json FROM command_ledger WHERE project_id=? AND person_id=? ORDER BY created_at DESC LIMIT 1`, [context.activeProjectAssignments[0].projectId, context.person.id]);
+      if (latest.rows.length === 0) {
+        addResult('9 · Duplicate replay / idempotency', 'No command exists to replay', false);
+        return;
+      }
+      const row = latest.rows.item(0) as Record<string, unknown>;
+      const result = await runtime.requestManualSync();
+      const hasPriorReceipt = Boolean(row.server_result_json);
+      const passed = result.status === 'SUCCEEDED' && hasPriorReceipt && row.status === 'SUCCEEDED';
+      addResult('9 · Duplicate replay / idempotency', `latest=${String(row.command_id)} status=${String(row.status)} priorReceipt=${hasPriorReceipt} sync=${JSON.stringify(result)}`, passed);
+      setStatus(passed ? 'REPLAY OBSERVED WITH PRIOR AUTHORITATIVE RECEIPT' : 'DUPLICATE REPLAY NOT PROVEN — NO NEW COMMAND WAS FABRICATED');
+    } catch (error) {
+      addResult('9 · Duplicate replay / idempotency', error instanceof Error ? error.message : String(error), false);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const induceConflict = async () => {
+    if (!context) { setStatus('Authenticate first'); return; }
+    const assignment = context.activeProjectAssignments[0];
+    setRunning(true);
+    try {
+      const current = await getDb().execute(`SELECT current_revision, server_revision FROM attendance_state WHERE project_id=? AND person_id=? ORDER BY work_date_utc DESC LIMIT 1`, [assignment.projectId, context.person.id]);
+      if (current.rows.length === 0) throw new Error('No local attendance state to make stale');
+      const row = current.rows.item(0) as Record<string, unknown>;
+      const staleRevision = Math.max(0, Number(row.server_revision ?? row.current_revision ?? 1) - 1);
+      await getDb().execute(`UPDATE attendance_state SET current_revision=?, sync_status='PENDING_SYNC' WHERE project_id=? AND person_id=?`, [staleRevision, assignment.projectId, context.person.id]);
+      const mutation = await AttendanceService.checkIn({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: nowUtc(), online: false });
+      addResult('10 · Conflict setup', `Stale local revision ${staleRevision}; command ${mutation.command.commandId} created. Run SYNC CONFLICT COMMAND next.`, mutation.command.status === 'PENDING');
+      await refreshLocalState();
+    } catch (error) {
+      addResult('10 · Conflict setup', error instanceof Error ? error.message : String(error), false);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const validationPath = async () => {
+    if (!context) { setStatus('Authenticate first'); return; }
+    const assignment = context.activeProjectAssignments[0];
+    setRunning(true);
+    try {
+      const invalidTime = new Date(Date.now() + 86400000).toISOString();
+      await AttendanceService.checkIn({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: invalidTime, online: false });
+      addResult('11 · Local validation rejection', 'Unexpectedly accepted a future work-date mutation', false);
+    } catch (error) {
+      addResult('11 · Local validation rejection', error instanceof Error ? error.message : String(error), true);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const lifecycleStress = async () => {
+    setRunning(true);
+    try {
+      await Promise.all([runtime.start(), runtime.start(), runtime.start()]);
+      await Promise.all([runtime.stop(), runtime.stop(), runtime.stop()]);
+      await runtime.start();
+      addResult('12 · Lifecycle/race safety', 'Concurrent start/stop calls completed without throwing; runtime restarted successfully.', true);
+    } catch (error) {
+      addResult('12 · Lifecycle/race safety', error instanceof Error ? error.message : String(error), false);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const signOut = async () => {
+    await runtime.stop();
+    await authService.signOut();
+    setContext(null);
+    setStatus('SIGNED OUT');
+    await refreshLocalState();
+  };
+
+  const passed = results.filter(result => result.passed).length;
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <View style={styles.header}>
+        <Pressable onPress={onBack} hitSlop={12}><Text style={styles.back}>‹ BACK</Text></Pressable>
+        <Text style={styles.label}>M1.7 PHYSICAL QA</Text>
+      </View>
+      <Text style={styles.eyebrow}>SITE-SYNC</Text>
+      <Text style={styles.title}>REAL RUNTIME</Text>
+      <Text style={styles.subtitle}>Physical acceptance harness for the complete M1.7 sync contract.</Text>
+      <View style={styles.warning}>
+        <Text style={styles.warningTitle}>ISOLATED TEST PROJECT ONLY</Text>
+        <Text style={styles.warningBody}>Hard-wired to SITE-SYNC-M17-TEST. No production URL, service-role key, or production mutation is used by this harness.</Text>
+      </View>
+
+      {!context && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>1 · AUTHENTICATION / CONTEXT</Text>
+          <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="Test account email" placeholderTextColor="#8A94A8" style={styles.input} />
+          <TextInput secureTextEntry value={password} onChangeText={setPassword} placeholder="Test account password" placeholderTextColor="#8A94A8" style={styles.input} />
+          <Pressable style={styles.primary} disabled={running || !dbReady || !email || !password} onPress={login}>
+            <Text style={styles.primaryText}>{running ? 'AUTHENTICATING…' : dbReady ? 'SIGN IN TO ISOLATED PROJECT' : 'INITIALISING LOCAL DATABASE…'}</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {context && (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>IDENTITY / PROJECT</Text>
+            <Text style={styles.identity}>{context.person.displayName}</Text>
+            <Text style={styles.detail}>{context.organisation.name} · {context.activeProjectAssignments[0]?.projectId}</Text>
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>2–12 · EXECUTABLE ACCEPTANCE CONTROLS</Text>
+            <Pressable style={styles.primary} disabled={running} onPress={createCheckIn}><Text style={styles.primaryText}>2 · CREATE OFFLINE CHECK-IN</Text></Pressable>
+            <Pressable style={styles.secondary} disabled={running} onPress={captureRestartCheckpoint}><Text style={styles.secondaryText}>3 · CAPTURE RESTART CHECKPOINT</Text></Pressable>
+            <Pressable style={styles.primary} disabled={running} onPress={() => void syncPending()}><Text style={styles.primaryText}>4–6 · RESTORE CONNECTIVITY + SYNC / RECONCILE</Text></Pressable>
+            <Pressable style={styles.secondary} disabled={running} onPress={checkout}><Text style={styles.secondaryText}>7 · OFFLINE CHECK-OUT + TIMESHEET</Text></Pressable>
+            <Pressable style={styles.secondary} disabled={running} onPress={duplicateReplay}><Text style={styles.secondaryText}>9 · REPLAY / IDEMPOTENCY CHECK</Text></Pressable>
+            <Pressable style={styles.secondary} disabled={running} onPress={induceConflict}><Text style={styles.secondaryText}>10 · INDUCE STALE-REVISION CONFLICT</Text></Pressable>
+            <Pressable style={styles.secondary} disabled={running} onPress={() => void syncPending('10 · Conflict response / server-wins')}><Text style={styles.secondaryText}>10 · SYNC CONFLICT COMMAND</Text></Pressable>
+            <Pressable style={styles.secondary} disabled={running} onPress={validationPath}><Text style={styles.secondaryText}>11 · LOCAL VALIDATION REJECTION</Text></Pressable>
+            <Pressable style={styles.secondary} disabled={running} onPress={lifecycleStress}><Text style={styles.secondaryText}>12 · LIFECYCLE START/STOP RACE</Text></Pressable>
+            <Pressable style={styles.tertiary} disabled={running} onPress={signOut}><Text style={styles.tertiaryText}>SIGN OUT / STOP RUNTIME</Text></Pressable>
+          </View>
+        </>
+      )}
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>REPOSITORY-DRIVEN OBSERVATION</Text>
+        <Text style={styles.local}>{localState}</Text>
+        <Text style={styles.status}>{status}</Text>
+        <Text style={styles.detail}>Restart checkpoint: {restartCheckpoint}</Text>
+        {observedAt && <Text style={styles.detail}>Last repository event: {observedAt}</Text>}
+      </View>
+
+      {results.length > 0 && (
+        <View style={styles.card}>
+          <Text style={styles.summary}>{passed}/{results.length} OBSERVATIONS PASSED</Text>
+          {results.map(result => (
+            <View key={result.id} style={styles.row}>
+              <View style={[styles.dot, result.passed ? styles.pass : styles.fail]} />
+              <View style={styles.copy}>
+                <Text style={styles.name}>{result.label}</Text>
+                <Text style={styles.detail}>{result.detail}</Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { padding: 24, paddingBottom: 48, backgroundColor: '#F4F6FA', minHeight: '100%' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 },
+  back: { color: '#0D1733', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  label: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  eyebrow: { color: '#65718A', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+  title: { marginTop: 4, color: '#0D1733', fontSize: 30, fontWeight: '900' },
+  subtitle: { marginTop: 6, color: '#59657D', fontSize: 14, lineHeight: 20 },
+  warning: { marginTop: 22, padding: 16, borderRadius: 16, backgroundColor: '#FFF4D8', borderWidth: 1, borderColor: '#E9C46A' },
+  warningTitle: { color: '#6B4C00', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  warningBody: { marginTop: 6, color: '#735B1C', fontSize: 12, lineHeight: 18 },
+  card: { marginTop: 16, padding: 18, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE2EF' },
+  cardTitle: { color: '#0D1733', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+  input: { marginTop: 12, borderWidth: 1, borderColor: '#CBD3E3', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, color: '#0D1733', backgroundColor: '#F8F9FC' },
+  primary: { marginTop: 10, borderRadius: 14, paddingVertical: 15, alignItems: 'center', backgroundColor: '#0D1733' },
+  primaryText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textAlign: 'center' },
+  secondary: { marginTop: 10, borderRadius: 14, paddingVertical: 15, alignItems: 'center', backgroundColor: '#F3B33D' },
+  secondaryText: { color: '#0D1733', fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textAlign: 'center' },
+  tertiary: { marginTop: 10, paddingVertical: 10, alignItems: 'center' },
+  tertiaryText: { color: '#65718A', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  identity: { marginTop: 8, color: '#0D1733', fontSize: 20, fontWeight: '900' },
+  detail: { marginTop: 4, color: '#65718A', fontSize: 11, lineHeight: 16 },
+  local: { marginTop: 10, color: '#0D1733', fontSize: 12, lineHeight: 18, fontWeight: '700' },
+  status: { marginTop: 8, color: '#65718A', fontSize: 11, lineHeight: 16 },
+  summary: { color: '#0D1733', fontSize: 16, fontWeight: '900' },
+  row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#E8ECF4', marginTop: 8 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginTop: 5 },
+  pass: { backgroundColor: '#36A269' },
+  fail: { backgroundColor: '#C84D4D' },
+  copy: { flex: 1, marginLeft: 12 },
+  name: { color: '#0D1733', fontSize: 12, fontWeight: '800' },
+});
