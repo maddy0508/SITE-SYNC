@@ -7,6 +7,8 @@ interface Props {
   onContinue: () => void;
 }
 
+const QA_BOOTSTRAP_TOKEN = 'M17-PHYSICAL-QA-ONLY-2026';
+
 function makeCredentials() {
   const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
   return { email: `m17-qa-${suffix}@example.test`, password: `M17-QA-${suffix}-Aa9!` };
@@ -24,11 +26,20 @@ export function M17QaAccountProvisionScreen({ client, onContinue }: Props) {
     setStatus('Creating isolated Supabase account…');
     try {
       const next = makeCredentials();
-      const { data, error } = await client.auth.signUp({ email: next.email, password: next.password });
-      if (error) throw error;
-      if (!data.user || !data.session) {
-        throw new Error('Supabase created the account but did not issue a session. The isolated M1.7 project must have email confirmation disabled for this physical QA provisioning flow.');
-      }
+      const { data: provisioned, error: provisionError } = await client.functions.invoke('m17-qa-provision-account', {
+        body: { email: next.email, password: next.password },
+        headers: { 'x-m17-qa-bootstrap': QA_BOOTSTRAP_TOKEN },
+      });
+      if (provisionError) throw new Error(`QA account provisioning failed: ${provisionError.message}`);
+      if (!provisioned?.ok || provisioned.email !== next.email) throw new Error('QA account provisioning returned an unexpected result.');
+
+      const { data: signedIn, error: signInError } = await client.auth.signInWithPassword({
+        email: next.email,
+        password: next.password,
+      });
+      if (signInError) throw new Error(`QA account sign-in failed: ${signInError.message}`);
+      if (!signedIn.user || !signedIn.session) throw new Error('QA account was created but no authenticated session was issued.');
+
       const { data: bootstrap, error: bootstrapError } = await client.rpc('m17_qa_bootstrap_current_user', {
         p_display_name: displayName.trim() || 'M17 QA WORKER',
         p_role: 'WORKER',
