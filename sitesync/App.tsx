@@ -91,10 +91,6 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   useEffect(() => {
     if (screen !== 'm17provision' && screen !== 'm17qa') return undefined;
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (screen === 'm17qa') {
-        setScreen('m17provision');
-        return true;
-      }
       void exitM17();
       return true;
     });
@@ -116,10 +112,11 @@ export default function App({ syncLifecycle }: AppProps = {}) {
       const lifecycle = new DefaultSyncLifecycle(runtime, AppState, network, authService);
       composition = { client, authService, runtime, lifecycle };
       await lifecycle.start();
-      const module = require('./src/attendance/M17RealRuntimeQaScreen') as { M17RealRuntimeQaScreen: M17QaScreenComponent };
+      const module = require('./src/attendance/M17RealRuntimeQaScreenV2') as { M17RealRuntimeQaScreenV2: M17QaScreenComponent };
       setM17(composition);
-      setM17QaScreen(() => module.M17RealRuntimeQaScreen);
-      setScreen('m17provision');
+      setM17QaScreen(() => module.M17RealRuntimeQaScreenV2);
+      const session = await authService.getCurrentSession();
+      setScreen(session ? 'm17qa' : 'm17provision');
     } catch (error) {
       if (composition) await composition.lifecycle.dispose().catch(() => undefined);
       if (databaseReady) await (require('./src/database/localPersistence') as typeof import('./src/database/localPersistence')).closeDatabase().catch(() => undefined);
@@ -140,7 +137,7 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   if (screen === 'm17qa') {
     if (!m17 || !m17QaScreen) return null;
     const M17RealRuntimeQaScreen = m17QaScreen;
-    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17RealRuntimeQaScreen onBack={() => setScreen('m17provision')} authService={m17.authService} client={m17.client} runtime={m17.runtime} /></SafeAreaView>;
+    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17RealRuntimeQaScreen onBack={() => void exitM17()} authService={m17.authService} client={m17.client} runtime={m17.runtime} /></SafeAreaView>;
   }
 
   return <SafeAreaView style={styles.root}>
