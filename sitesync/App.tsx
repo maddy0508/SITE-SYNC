@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AppState, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from 'react-native';
 import type { ApplicationContext } from './src/identity/projectContext';
 import type { ProjectContextRecord, ProjectRosterRecord } from './src/domain/localPersistence';
 import { M15QaScreen } from './src/qr/M15QaScreen';
@@ -88,6 +88,19 @@ export default function App({ syncLifecycle }: AppProps = {}) {
     setScreen('home');
   };
 
+  useEffect(() => {
+    if (screen !== 'm17provision' && screen !== 'm17qa') return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (screen === 'm17qa') {
+        setScreen('m17provision');
+        return true;
+      }
+      void exitM17();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [screen, m17]);
+
   const openM17Qa = async () => {
     setM17Loading(true);
     setM17LoadError(null);
@@ -122,12 +135,12 @@ export default function App({ syncLifecycle }: AppProps = {}) {
   if (screen === 'm16qa') return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M16QaScreen onBack={() => setScreen('home')} /></SafeAreaView>;
   if (screen === 'm17provision') {
     if (!m17) return null;
-    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17QaAccountProvisionScreen client={m17.client} onContinue={() => setScreen('m17qa')} /></SafeAreaView>;
+    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17QaAccountProvisionScreen client={m17.client} onBack={() => void exitM17()} onContinue={() => setScreen('m17qa')} /></SafeAreaView>;
   }
   if (screen === 'm17qa') {
     if (!m17 || !m17QaScreen) return null;
     const M17RealRuntimeQaScreen = m17QaScreen;
-    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17RealRuntimeQaScreen onBack={exitM17} authService={m17.authService} client={m17.client} runtime={m17.runtime} /></SafeAreaView>;
+    return <SafeAreaView style={styles.root}><StatusBar barStyle="dark-content" backgroundColor="#F4F6FA" /><M17RealRuntimeQaScreen onBack={() => setScreen('m17provision')} authService={m17.authService} client={m17.client} runtime={m17.runtime} /></SafeAreaView>;
   }
 
   return <SafeAreaView style={styles.root}>
