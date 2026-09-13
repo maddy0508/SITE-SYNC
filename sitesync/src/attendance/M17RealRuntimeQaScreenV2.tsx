@@ -12,6 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { M17_SUPABASE_URL } from '../supabase/m17SupabaseClient';
 import { createQaEvidence, type QaEvidenceStatus } from './m17QaContracts';
 import { M17_QA_GATES, nextRequiredAction } from './m17QaTestPlan';
+import { deserializeM17QaContext, M17_QA_CONTEXT_CACHE_TABLE, serializeM17QaContext } from './m17QaContextCache';
 
 type Result = { status: QaEvidenceStatus; detail: string };
 const DATABASE_NAME = 'm17-real-runtime-device.db';
@@ -60,6 +61,17 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
     }
   }, []);
 
+  const cacheAuthenticatedContext = useCallback(async (value: ApplicationContext) => {
+    await getDb().execute(`CREATE TABLE IF NOT EXISTS ${M17_QA_CONTEXT_CACHE_TABLE} (user_id TEXT PRIMARY KEY, context_json TEXT NOT NULL, updated_at TEXT NOT NULL)`);
+    await getDb().execute(`INSERT INTO ${M17_QA_CONTEXT_CACHE_TABLE} (user_id, context_json, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET context_json=excluded.context_json, updated_at=excluded.updated_at`, [value.userId, serializeM17QaContext(value), nowUtc()]);
+  }, []);
+
+  const loadCachedContext = useCallback(async (userId: string): Promise<ApplicationContext | null> => {
+    const cached = await getDb().execute(`SELECT context_json FROM ${M17_QA_CONTEXT_CACHE_TABLE} WHERE user_id=? LIMIT 1`, [userId]);
+    if (!cached.rows.length) return null;
+    return deserializeM17QaContext(String((cached.rows.item(0) as Record<string, unknown>).context_json));
+  }, []);
+
   const resolveAuthenticatedContext = useCallback(async () => {
     const session = await authService.restoreSession();
     const identityService = new IdentityService(client);
@@ -79,19 +91,21 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
     }
     if (installation.status !== 'ACTIVE') throw new Error('Authoritative device installation is REVOKED');
     const resolved = await identityService.resolve(session.user.id);
-    setContext({
+    const resolvedContext: ApplicationContext = {
       userId: resolved.userId,
       profile: resolved.profile,
       person: resolved.person,
       organisation: resolved.organisation,
       memberships: resolved.memberships,
-      activeProjectAssignments: resolved.projectAssignments,
-      hasProjectAccess: true,
+      activeProjectAssignments: resolved.projectAssignments.filter(item => item.status === 'ACTIVE'),
+      hasProjectAccess: resolved.projectAssignments.some(item => item.status === 'ACTIVE'),
       device: installation,
-    });
+    };
+    setContext(resolvedContext);
+    await cacheAuthenticatedContext(resolvedContext);
     setResult(1, 'PASS', `Authenticated ${resolved.person.displayName}; active project ${assignment.projectId}; active device ${installation.deviceInstallationId}`);
     await runtime.start();
-  }, [authService, client, runtime, setResult]);
+  }, [authService, cacheAuthenticatedContext, client, runtime, setResult]);
 
   useEffect(() => {
     let mounted = true;
@@ -107,6 +121,7 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
         await initializeDatabase(DATABASE_NAME);
         if (!mounted) return;
         await getDb().execute(`CREATE TABLE IF NOT EXISTS ${CHECKPOINT_TABLE} (id INTEGER PRIMARY KEY CHECK (id = 1), command_id TEXT NOT NULL, created_at TEXT NOT NULL, consumed_at TEXT)`);
+        await getDb().execute(`CREATE TABLE IF NOT EXISTS ${M17_QA_CONTEXT_CACHE_TABLE} (user_id TEXT PRIMARY KEY, context_json TEXT NOT NULL, updated_at TEXT NOT NULL)`);
         setDbReady(true);
         await refreshLocalState();
         const checkpoint = await getDb().execute(`SELECT command_id, consumed_at FROM ${CHECKPOINT_TABLE} WHERE id=1 LIMIT 1`);
@@ -122,7 +137,17 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
         try {
           await resolveAuthenticatedContext();
         } catch (error) {
-          if (mounted) setStatus(`AUTHENTICATION/CONTEXT WAITING · ${error instanceof Error ? error.message : String(error)}`);
+          try {
+            const session = await authService.restoreSession();
+            const cachedContext = await loadCachedContext(session.user.id);
+            if (!cachedContext) throw error;
+            if (!mounted) return;
+            setContext(cachedContext);
+            setStatus(`OFFLINE SESSION RECOVERED · cached context restored; authoritative revalidation will occur when network returns.`);
+            await runtime.start();
+          } catch (fallbackError) {
+            if (mounted) setStatus(`AUTHENTICATION/CONTEXT WAITING · ${fallbackError instanceof Error ? fallbackError.message : String(fallbackError)}`);
+          }
         }
       } catch (error) {
         if (mounted) setStatus(`M1.7 PRE-FLIGHT FAILED · ${error instanceof Error ? error.message : String(error)}`);
@@ -134,7 +159,7 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
       unsubscribe();
       void runtime.stop().finally(() => closeDatabase().catch(() => undefined));
     };
-  }, [refreshLocalState, resolveAuthenticatedContext, runtime, setResult]);
+  }, [authService, loadCachedContext, refreshLocalState, resolveAuthenticatedContext, runtime, setResult]);
 
   const createOfflineCheckIn = async () => {
     if (!context || !dbReady) return;
@@ -158,6 +183,13 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
       const response = await fetch(M17_SUPABASE_URL, { method: 'HEAD' });
       if (!response) throw new Error('No network response');
       setResult(4, 'PASS', `Supabase endpoint became reachable after physical network restoration (${response.status}).`);
+      try {
+        await resolveAuthenticatedContext();
+      } catch (error) {
+        setResult(5, 'FAIL', `Authenticated context revalidation failed: ${error instanceof Error ? error.message : String(error)}.`);
+        setResult(6, 'FAIL', 'Authoritative reconciliation cannot be accepted until authenticated context is revalidated online.');
+        return;
+      }
       const result = await runtime.requestManualSync();
       if (result.status !== 'SUCCEEDED') {
         setResult(5, 'FAIL', `Authenticated RPC sync returned ${result.status}.`);
@@ -281,7 +313,8 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
   };
 
   const overall = useMemo(() => M17_QA_GATES.map(gate => ({ gate, result: results[gate.id] })).filter(item => item.result?.status === 'PASS').length, [results]);
-  const nextAction = nextRequiredAction(Object.fromEntries(Object.entries(results).map(([key, value]) => [Number(key), value?.status])) as Record<number, QaEvidenceStatus>);
+  const computedNextAction = nextRequiredAction(Object.fromEntries(Object.entries(results).map(([key, value]) => [Number(key), value?.status])) as Record<number, QaEvidenceStatus>);
+  const nextAction = restartRecovered && context && results[1]?.status !== 'PASS' ? 'Restore network, then run 4–6 · Restore Network + Sync for authoritative revalidation.' : computedNextAction;
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
