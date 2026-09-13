@@ -11,9 +11,10 @@ describe('M17 QA offline context cache', () => {
     activeProjectAssignments: [{ id: 'assignment-1', organisationId: 'org-1', projectId: 'project-1', companyId: 'company-1', companyMembershipId: 'membership-1', personId: 'person-1', projectRole: 'WORKER', status: 'ACTIVE' }],
     hasProjectAccess: true,
     device: {
-      id: 'device-1', userId: 'user-1', installationKey: 'install-1', deviceName: 'M1.7 PHYSICAL QA DEVICE', appVersion: 'M1.7-QA-HARDENED', osVersion: 'android', status: 'ACTIVE', createdAt: '2026-09-13T00:00:00.000Z', lastSeenAt: '2026-09-13T00:00:00.000Z', revokedAt: null,
+      id: 'device-1', deviceInstallationId: 'device-1', userId: 'user-1', installationKey: 'install-1', deviceName: 'M1.7 PHYSICAL QA DEVICE', appVersion: 'M1.7-QA-HARDENED', osVersion: 'android', status: 'ACTIVE', createdAt: '2026-09-13T00:00:00.000Z', lastSeenAt: '2026-09-13T00:00:00.000Z', revokedAt: null,
     },
   };
+  Object.defineProperty(context.device, 'deviceInstallationId', { value: 'device-1', enumerable: false, configurable: false, writable: false });
 
   it('round-trips the complete isolated context and restores the transport device alias', () => {
     const restored = deserializeM17QaContext(serializeM17QaContext(context));
