@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { createM17AuthStorage } from './m17AuthStorage';
 
 /**
  * M1.7 physical QA target only. This is deliberately the isolated test project,
@@ -8,12 +9,17 @@ import { createClient } from '@supabase/supabase-js';
 export const M17_SUPABASE_URL = 'https://fuaiodkyaqfandbenuol.supabase.co';
 const M17_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_o2Plx8R7mc0HJmemEsktYw_EuYevbzG';
 
+export const M17_AUTH_OPTIONS = {
+  persistSession: true,
+  autoRefreshToken: true,
+  detectSessionInUrl: false,
+};
+
 export function createM17SupabaseClient() {
   return createClient(M17_SUPABASE_URL, M17_SUPABASE_PUBLISHABLE_KEY, {
     auth: {
-      persistSession: false,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
+      ...M17_AUTH_OPTIONS,
+      storage: createM17AuthStorage(),
     },
   });
 }

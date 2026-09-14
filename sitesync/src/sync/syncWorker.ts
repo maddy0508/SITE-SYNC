@@ -39,6 +39,7 @@ export class SyncWorker {
   }
 
   async requestSync(_reason: SyncTriggerReason, now = new Date().toISOString()): Promise<SyncRunResult> {
+    if (!this.started) return { status: 'IDLE' };
     return this.runOnce(now);
   }
 
