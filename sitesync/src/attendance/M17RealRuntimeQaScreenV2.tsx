@@ -358,7 +358,7 @@ export function M17RealRuntimeQaScreenV2({ onBack, authService, client, runtime 
     const now = nowUtc();
     await getDb().execute(`INSERT INTO command_ledger (command_id, project_id, person_id, organisation_id, company_id, command_type, source, base_revision, status, attempt_count, max_attempts, processing_started_at, server_responded_at, synced_at, next_retry_at, server_result_json, server_error_code, failure_diagnostics, created_at, updated_at, command_payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?, ?)`, [commandId, assignment.projectId, context.person.id, String(seed.organisation_id), String(seed.company_id), String(probe.commandType), String(probe.source), Number(seed.base_revision), Number(seed.max_attempts ?? 3), now, now, JSON.stringify(probe)]);
     await runtime.start();
-    await new Promise(resolve => setTimeout(resolve, 750));
+    await new Promise<void>(resolve => setTimeout(resolve, 750));
     const row = (await getDb().execute(`SELECT status, next_retry_at, server_error_code FROM command_ledger WHERE command_id=?`, [commandId])).rows.item(0) as Record<string, unknown>;
     const passed = row.status === 'RETRYABLE_FAILURE' && row.server_error_code === 'TRANSPORT' && row.next_retry_at;
     setResult(11, passed ? 'PASS' : 'FAIL', passed ? `Physical network loss produced RETRYABLE_FAILURE with next_retry_at=${String(row.next_retry_at)}.` : `Expected RETRYABLE_FAILURE but observed ${String(row.status)}/${String(row.server_error_code)}.`);
