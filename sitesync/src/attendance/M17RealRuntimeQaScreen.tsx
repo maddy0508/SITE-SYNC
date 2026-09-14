@@ -22,6 +22,10 @@ function uuidV4(): string {
   });
 }
 function makeInstallationKey(): string { return `m17-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
+function requireDevice(context: ApplicationContext): NonNullable<ApplicationContext['device']> {
+  if (!context.device) throw new Error('Authoritative QA device is unavailable');
+  return context.device;
+}
 
 interface M17RealRuntimeQaScreenProps {
   onBack: () => void;
@@ -205,7 +209,7 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       const payload = JSON.parse(String(row.command_payload_json)) as Record<string, unknown>;
       const response = await rpc({
         command_id: String(row.command_id),
-        device_installation_id: context.device.id,
+        device_installation_id: requireDevice(context).id,
         project_id: String(row.project_id),
         person_id: String(row.person_id),
         work_date_utc: String(row.work_date_utc),
@@ -234,7 +238,7 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       const conflictPayload = { ...payload, commandId, eventId, baseRevision: staleRevision };
       const response = await rpc({
         command_id: commandId,
-        device_installation_id: context.device.id,
+        device_installation_id: requireDevice(context).id,
         project_id: String(row.project_id),
         person_id: String(row.person_id),
         work_date_utc: String(row.work_date_utc),
@@ -260,7 +264,7 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       const invalidPayload = { ...payload, commandId: uuidV4(), eventId: uuidV4() };
       const response = await rpc({
         command_id: commandId,
-        device_installation_id: context.device.id,
+        device_installation_id: requireDevice(context).id,
         project_id: String(row.project_id),
         person_id: String(row.person_id),
         work_date_utc: String(row.work_date_utc),
@@ -299,7 +303,7 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       };
       const response = await rpc({
         command_id: commandId,
-        device_installation_id: context.device.id,
+        device_installation_id: requireDevice(context).id,
         project_id: assignment.projectId,
         person_id: targetPersonId,
         work_date_utc: payload.workDateUtc,
