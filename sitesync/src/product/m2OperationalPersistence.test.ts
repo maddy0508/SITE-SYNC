@@ -12,7 +12,7 @@ const project: M2OperationalProjectInput = {
 };
 
 test('persists and reloads an operational project through the store boundary', async () => {
-  const rows = new Map<string, M2OperationalProjectInput>();
+  const rows = new Map<string, any>();
   const store: M2OperationalProjectStore = {
     save: async value => { rows.set(value.projectId, value); },
     load: async (projectId, organisationId, companyId) => {
@@ -27,10 +27,10 @@ test('persists and reloads an operational project through the store boundary', a
   expect(loaded?.workFronts[0].progressPercent).toBe(25);
 });
 
-test('does not load operational data across tenant boundaries', async () => {
+test('rejects a store result that crosses the requested tenant boundary', async () => {
   const store: M2OperationalProjectStore = {
     save: async () => undefined,
-    load: async () => ({ ...project, organisationId: 'other-org' }),
+    load: async () => ({ ...buildM2OperationalProject(project), organisationId: 'other-org' }),
   };
   await expect(loadM2OperationalProject(store, 'project-1', 'org-1', 'company-1')).rejects.toThrow('tenant mismatch');
 });
