@@ -35,6 +35,9 @@ jobs:
       - name: Install JavaScript dependencies
         working-directory: sitesync
         run: npm ci --ignore-scripts
+      - name: Run M1.7 APK capability audit
+        working-directory: sitesync
+        run: node scripts/m17-capability-audit.mjs
       - name: Run full Jest suite
         working-directory: sitesync
         run: npm test -- --runInBand
@@ -44,14 +47,28 @@ jobs:
       - name: ESLint
         working-directory: sitesync
         run: npx eslint .
+      - name: Reject production configuration
+        working-directory: sitesync
+        shell: bash
+        run: |
+          ! grep -R --line-number --exclude-dir=node_modules --exclude='*.md' -E 'pjosqguzbsteaoptaifw|SITE-SYNC\.supabase\.co' src android || exit 1
       - name: Assemble physical M1.7 QA APK
         working-directory: sitesync/android
         run: ./gradlew :app:assembleRelease --no-daemon --stacktrace
+      - name: Verify APK exists and record SHA-256
+        working-directory: sitesync
+        shell: bash
+        run: |
+          APK=$(find android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          test -n "$APK"
+          sha256sum "$APK" | tee android/app/build/outputs/apk/release/SITE-SYNC-M1.7-QA-APK-SHA256.txt
       - name: Write APK provenance manifest
         working-directory: sitesync
         env:
           M17_SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
+          APK=$(find android/app/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' | head -n 1)
+          SHA=$(sha256sum "$APK" | awk '{print $1}')
           mkdir -p android/app/build/outputs/apk/release
           cat > android/app/build/outputs/apk/release/SITE-SYNC-M1.7-QA-PROVENANCE.txt <<EOF
           branch=${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}
@@ -62,6 +79,7 @@ jobs:
           production_supabase_touched=false
           runtime_acceptance_contract=MMM-57
           repository_ui_contract=MMM-58
+          apk_sha256=${SHA}
           EOF
       - name: Upload M1.7 QA APK and provenance
         uses: actions/upload-artifact@v4
