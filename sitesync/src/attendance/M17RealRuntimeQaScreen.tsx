@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { AuthService } from '../auth/authService';
 import { AttendanceService } from './attendanceService';
-import { closeDatabase, getDb, getLocalDeviceSession, initializeDatabase } from '../database/localPersistence';
+import { closeDatabase, getDb, initializeDatabase, getLocalDeviceSession } from '../database/localPersistence';
 import { subscribeRepositoryChanges } from '../database/repositoryChangeBus';
 import { DeviceRegistrationService } from '../identity/deviceRegistrationService';
 import { IdentityService } from '../identity/identityService';
@@ -14,6 +14,13 @@ type QaResult = { id: number; label: string; detail: string; passed: boolean };
 const DATABASE_NAME = 'm17-real-runtime-device.db';
 
 function nowUtc(): string { return new Date().toISOString(); }
+function uuidV4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, character => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
 function makeInstallationKey(): string { return `m17-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`; }
 
 interface M17RealRuntimeQaScreenProps {
@@ -24,19 +31,17 @@ interface M17RealRuntimeQaScreenProps {
 }
 
 export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }: M17RealRuntimeQaScreenProps) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [context, setContext] = useState<ApplicationContext | null>(null);
   const [running, setRunning] = useState(false);
   const [dbReady, setDbReady] = useState(false);
   const [results, setResults] = useState<QaResult[]>([]);
-  const [status, setStatus] = useState('Database initialising…');
+  const [status, setStatus] = useState('Initialising isolated M1.7 runtime…');
   const [localState, setLocalState] = useState('No local attendance state loaded');
   const [observedAt, setObservedAt] = useState<string | null>(null);
   const [restartCheckpoint, setRestartCheckpoint] = useState('Not captured');
 
   const addResult = (label: string, detail: string, passed: boolean) => {
-    setResults(resultsPrevious => [...resultsPrevious, { id: Date.now() + resultsPrevious.length, label, detail, passed }]);
+    setResults(previous => [...previous, { id: Date.now() + previous.length, label, detail, passed }]);
   };
 
   const refreshLocalState = async () => {
@@ -66,13 +71,48 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       .then(async () => {
         if (!mounted) return;
         setDbReady(true);
+        const session = await authService.restoreSession();
+        const identityService = new IdentityService(client);
+        const identity = await identityService.resolve(session.user.id);
+        const activeAssignment = identity.projectAssignments.find(assignment => assignment.status === 'ACTIVE');
+        if (!activeAssignment) throw new Error('Authenticated QA identity has no active project assignment');
+
+        const deviceService = new DeviceRegistrationService(client);
+        let installation = await deviceService.get(session.user.id);
+        const localDevice = await getLocalDeviceSession(session.user.id);
+        if (!installation) {
+          installation = await deviceService.register(session.user.id, {
+            installationKey: localDevice?.installationKey ?? makeInstallationKey(),
+            deviceName: 'M1.7 PHYSICAL QA DEVICE',
+            appVersion: 'M1.7-QA',
+            osVersion: String(Platform.Version),
+            now: nowUtc(),
+          });
+        }
+        if (installation.status !== 'ACTIVE') throw new Error('Authoritative QA device is REVOKED; restore a clean test device before pre-flight');
+
+        const resolved = await identityService.resolve(session.user.id);
+        if (!resolved.projectAssignments.some(assignment => assignment.status === 'ACTIVE')) throw new Error('Active project assignment disappeared during identity resolution');
+        if (!mounted) return;
+        setContext({
+          userId: resolved.userId,
+          profile: resolved.profile,
+          person: resolved.person,
+          organisation: resolved.organisation,
+          memberships: resolved.memberships,
+          activeProjectAssignments: resolved.projectAssignments,
+          hasProjectAccess: true,
+          device: installation,
+        });
+        setStatus(`READY · ${resolved.person.displayName} · ${activeAssignment.projectId} · device ${installation.id}`);
+        addResult('1 · Automatic identity/context/device provisioning', 'Restored the existing authenticated session, resolved authoritative identity/project access, and verified or registered the isolated QA device without tester-entered credentials.', true);
         await refreshLocalState();
-        if (mounted) setStatus('READY — isolated M1.7 runtime QA');
       })
       .catch(error => {
         if (!mounted) return;
         setDbReady(false);
-        setStatus(`DATABASE INITIALISATION FAILED · ${error instanceof Error ? error.message : String(error)}`);
+        addResult('1 · Automatic identity/context/device provisioning', error instanceof Error ? error.message : String(error), false);
+        setStatus('PRE-FLIGHT FAILED');
       });
 
     return () => {
@@ -80,97 +120,41 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       unsubscribe();
       void runtime.stop().finally(() => closeDatabase().catch(() => undefined));
     };
-  }, [runtime]);
-
-  const login = async () => {
-    if (!dbReady) {
-      setStatus('WAITING FOR LOCAL DATABASE INITIALISATION');
-      return;
-    }
-    setRunning(true);
-    setStatus('Authenticating against isolated Supabase…');
-    try {
-      const session = await authService.signIn(email.trim(), password);
-      const identityService = new IdentityService(client);
-      const identity = await identityService.resolve(session.user.id);
-      if (identity.projectAssignments.length === 0) throw new Error('Authenticated user has no active project assignment');
-
-      let installation = await new DeviceRegistrationService(client).get(session.user.id);
-      const localDevice = await getLocalDeviceSession(session.user.id);
-      if (!installation || installation.status !== 'ACTIVE') {
-        installation = await new DeviceRegistrationService(client).register(session.user.id, {
-          installationKey: localDevice?.installationKey ?? makeInstallationKey(),
-          deviceName: 'M1.7 PHYSICAL QA DEVICE',
-          appVersion: 'M1.7-QA',
-          osVersion: String(Platform.Version),
-          now: nowUtc(),
-        });
-      }
-      if (installation.status !== 'ACTIVE') throw new Error('Authoritative device installation is REVOKED');
-
-      const resolved = await identityService.resolve(session.user.id);
-      const activeAssignment = resolved.projectAssignments.find(a => a.status === 'ACTIVE');
-      if (!activeAssignment) throw new Error('No active project assignment after device registration');
-
-      setContext({
-        userId: resolved.userId,
-        profile: resolved.profile,
-        person: resolved.person,
-        organisation: resolved.organisation,
-        memberships: resolved.memberships,
-        activeProjectAssignments: resolved.projectAssignments,
-        hasProjectAccess: true,
-        device: installation,
-      });
-      setStatus(`AUTHENTICATED · ${resolved.person.displayName} · ${activeAssignment.projectId}`);
-      addResult('1 · Isolated authentication/context', 'Real Supabase session, authoritative identity, active project assignment and active device', true);
-      await runtime.start();
-      await refreshLocalState();
-    } catch (error) {
-      addResult('1 · Isolated authentication/context', error instanceof Error ? error.message : String(error), false);
-      setStatus('AUTHENTICATION FAILED');
-    } finally {
-      setRunning(false);
-    }
-  };
+  }, [authService, client, runtime]);
 
   const createCheckIn = async () => {
-    if (!context) { setStatus('Authenticate first'); return; }
-    const assignment = context.activeProjectAssignments[0];
+    if (!context) { setStatus('Pre-flight has not established context'); return; }
+    const assignment = context.activeProjectAssignments.find(item => item.status === 'ACTIVE');
+    if (!assignment) { setStatus('No active assignment'); return; }
     setRunning(true);
     try {
       const mutation = await AttendanceService.checkIn({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: nowUtc(), online: false });
-      addResult('2 · Offline durable command', `${mutation.command.commandId} · ${mutation.command.status} · ${mutation.state.syncStatus}`, mutation.command.status === 'PENDING' && mutation.state.syncStatus === 'OFFLINE_PENDING_VERIFICATION');
-      setStatus('OFFLINE COMMAND PERSISTED — TERMINATE/RESTART APP NOW');
+      const passed = mutation.command.status === 'PENDING' && mutation.state.syncStatus === 'OFFLINE_PENDING_VERIFICATION';
+      addResult('2 · Offline durable attendance command', `${mutation.command.commandId} · ${mutation.command.status} · ${mutation.state.syncStatus}`, passed);
+      setStatus(passed ? 'OFFLINE COMMAND DURABLY PERSISTED' : 'OFFLINE COMMAND DID NOT ENTER REQUIRED STATE');
       await refreshLocalState();
     } catch (error) {
-      addResult('2 · Offline durable command', error instanceof Error ? error.message : String(error), false);
-    } finally {
-      setRunning(false);
-    }
+      addResult('2 · Offline durable attendance command', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
   };
 
   const captureRestartCheckpoint = async () => {
     try {
       const result = await getDb().execute(`SELECT command_id, status, attempt_count FROM command_ledger ORDER BY created_at DESC LIMIT 1`);
-      if (result.rows.length === 0) {
-        addResult('3 · Process-termination persistence', 'No command exists before restart checkpoint', false);
-        return;
-      }
+      if (result.rows.length === 0) throw new Error('No durable command exists before restart checkpoint');
       const row = result.rows.item(0) as Record<string, unknown>;
       const checkpoint = `${String(row.command_id)} · ${String(row.status)} · attempts ${String(row.attempt_count)}`;
       setRestartCheckpoint(checkpoint);
-      addResult('3 · Process-termination persistence', `SQLite checkpoint: ${checkpoint}. Physically terminate and reopen before SYNC.`, true);
+      addResult('3 · Process-termination persistence checkpoint', `SQLite checkpoint captured: ${checkpoint}. Physically terminate and reopen the app before running SYNC.`, true);
       setStatus('RESTART CHECKPOINT CAPTURED');
     } catch (error) {
-      addResult('3 · Process-termination persistence', error instanceof Error ? error.message : String(error), false);
+      addResult('3 · Process-termination persistence checkpoint', error instanceof Error ? error.message : String(error), false);
     }
   };
 
-  const syncPending = async (label = '4 · Connectivity restoration / retry + 5 · Real authenticated RPC + 6 · reconciliation') => {
-    if (!context) { setStatus('Authenticate first'); return; }
+  const syncPending = async (label = '4 · Real RPC sync / retry / reconciliation') => {
+    if (!context) { setStatus('Pre-flight has not established context'); return; }
     setRunning(true);
-    setStatus('Submitting pending command through real authenticated RPC…');
     try {
       await runtime.start();
       const result = await runtime.requestManualSync();
@@ -181,81 +165,154 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
     } catch (error) {
       addResult(label, error instanceof Error ? error.message : String(error), false);
       setStatus('SYNC FAILED');
-    } finally {
-      setRunning(false);
-    }
+    } finally { setRunning(false); }
   };
 
   const checkout = async () => {
-    if (!context) { setStatus('Authenticate first'); return; }
-    const assignment = context.activeProjectAssignments[0];
+    if (!context) { setStatus('Pre-flight has not established context'); return; }
+    const assignment = context.activeProjectAssignments.find(item => item.status === 'ACTIVE');
+    if (!assignment) return;
     setRunning(true);
     try {
       const mutation = await AttendanceService.checkOut({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: nowUtc(), online: false });
-      addResult('7 · Check-in/check-out + timesheet derivation', `${mutation.state.state} · timesheet ${mutation.timesheet.status} · ${mutation.timesheet.totalMinutes ?? 'null'} minutes · ${mutation.timesheet.syncStatus}`, mutation.state.state === 'CHECKED_OUT' && mutation.timesheet.status === 'COMPLETE');
+      const passed = mutation.state.state === 'CHECKED_OUT' && mutation.timesheet.status === 'COMPLETE';
+      addResult('5 · Check-out and timesheet derivation', `${mutation.state.state} · timesheet ${mutation.timesheet.status} · ${mutation.timesheet.totalMinutes ?? 'null'} minutes · ${mutation.timesheet.syncStatus}`, passed);
       await refreshLocalState();
     } catch (error) {
-      addResult('7 · Check-in/check-out + timesheet derivation', error instanceof Error ? error.message : String(error), false);
-    } finally {
-      setRunning(false);
-    }
+      addResult('5 · Check-out and timesheet derivation', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
+  };
+
+  const latestCommand = async () => {
+    const result = await getDb().execute(`SELECT command_id, project_id, person_id, work_date_utc, base_revision, command_type, command_payload_json, status, server_result_json FROM command_ledger ORDER BY created_at DESC LIMIT 1`);
+    if (result.rows.length === 0) throw new Error('No command exists in local ledger');
+    return result.rows.item(0) as Record<string, unknown>;
+  };
+
+  const rpc = async (args: Record<string, unknown>) => {
+    const response = await client.rpc('sync_attendance_command', args);
+    if (response.error) throw new Error(`${response.error.code ?? 'RPC_ERROR'}: ${response.error.message}`);
+    if (!response.data || typeof response.data !== 'object') throw new Error('RPC returned no structured response');
+    return response.data as Record<string, unknown>;
   };
 
   const duplicateReplay = async () => {
-    if (!context) { setStatus('Authenticate first'); return; }
+    if (!context) return;
     setRunning(true);
     try {
-      const latest = await getDb().execute(`SELECT command_id, status, server_result_json FROM command_ledger WHERE project_id=? AND person_id=? ORDER BY created_at DESC LIMIT 1`, [context.activeProjectAssignments[0].projectId, context.person.id]);
-      if (latest.rows.length === 0) {
-        addResult('9 · Duplicate replay / idempotency', 'No command exists to replay', false);
-        return;
-      }
-      const row = latest.rows.item(0) as Record<string, unknown>;
-      const result = await runtime.requestManualSync();
-      const hasPriorReceipt = Boolean(row.server_result_json);
-      const passed = result.status === 'SUCCEEDED' && hasPriorReceipt && row.status === 'SUCCEEDED';
-      addResult('9 · Duplicate replay / idempotency', `latest=${String(row.command_id)} status=${String(row.status)} priorReceipt=${hasPriorReceipt} sync=${JSON.stringify(result)}`, passed);
-      setStatus(passed ? 'REPLAY OBSERVED WITH PRIOR AUTHORITATIVE RECEIPT' : 'DUPLICATE REPLAY NOT PROVEN — NO NEW COMMAND WAS FABRICATED');
+      const row = await latestCommand();
+      if (String(row.status) !== 'SUCCEEDED') throw new Error(`Latest command is ${String(row.status)}; sync a command successfully before replay`);
+      const payload = JSON.parse(String(row.command_payload_json)) as Record<string, unknown>;
+      const response = await rpc({
+        command_id: String(row.command_id),
+        device_installation_id: context.device.id,
+        project_id: String(row.project_id),
+        person_id: String(row.person_id),
+        work_date_utc: String(row.work_date_utc),
+        base_revision: Number(row.base_revision),
+        command_type: String(row.command_type),
+        payload,
+      });
+      const passed = response.status === 'DUPLICATE_ACCEPTED' && response.command_id === row.command_id;
+      addResult('6 · Same-command duplicate replay', JSON.stringify(response), passed);
+      setStatus(passed ? 'REAL RPC DUPLICATE ACCEPTED WITH ORIGINAL COMMAND ID' : 'DUPLICATE REPLAY NOT PROVEN');
     } catch (error) {
-      addResult('9 · Duplicate replay / idempotency', error instanceof Error ? error.message : String(error), false);
-    } finally {
-      setRunning(false);
-    }
+      addResult('6 · Same-command duplicate replay', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
   };
 
-  const induceConflict = async () => {
-    if (!context) { setStatus('Authenticate first'); return; }
-    const assignment = context.activeProjectAssignments[0];
+  const revisionConflict = async () => {
+    if (!context) return;
     setRunning(true);
     try {
-      const current = await getDb().execute(`SELECT current_revision, server_revision FROM attendance_state WHERE project_id=? AND person_id=? ORDER BY work_date_utc DESC LIMIT 1`, [assignment.projectId, context.person.id]);
-      if (current.rows.length === 0) throw new Error('No local attendance state to make stale');
-      const row = current.rows.item(0) as Record<string, unknown>;
-      const staleRevision = Math.max(0, Number(row.server_revision ?? row.current_revision ?? 1) - 1);
-      await getDb().execute(`UPDATE attendance_state SET current_revision=?, sync_status='PENDING_SYNC' WHERE project_id=? AND person_id=?`, [staleRevision, assignment.projectId, context.person.id]);
-      const mutation = await AttendanceService.checkIn({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: nowUtc(), online: false });
-      addResult('10 · Conflict setup', `Stale local revision ${staleRevision}; command ${mutation.command.commandId} created. Run SYNC CONFLICT COMMAND next.`, mutation.command.status === 'PENDING');
-      await refreshLocalState();
+      const row = await latestCommand();
+      const payload = JSON.parse(String(row.command_payload_json)) as Record<string, unknown>;
+      const currentRevision = Number(row.base_revision) + 1;
+      const staleRevision = Math.max(0, currentRevision - 1);
+      const commandId = uuidV4();
+      const eventId = uuidV4();
+      const conflictPayload = { ...payload, commandId, eventId, baseRevision: staleRevision };
+      const response = await rpc({
+        command_id: commandId,
+        device_installation_id: context.device.id,
+        project_id: String(row.project_id),
+        person_id: String(row.person_id),
+        work_date_utc: String(row.work_date_utc),
+        base_revision: staleRevision,
+        command_type: String(row.command_type),
+        payload: conflictPayload,
+      });
+      const passed = response.status === 'REVISION_CONFLICT' && response.command_id === commandId;
+      addResult('7 · Server-side revision conflict', JSON.stringify(response), passed);
+      setStatus(passed ? 'REAL SERVER CONFLICT RETURNED — AUTHORITATIVE STATE PRESERVED' : 'REVISION CONFLICT NOT PROVEN');
     } catch (error) {
-      addResult('10 · Conflict setup', error instanceof Error ? error.message : String(error), false);
-    } finally {
-      setRunning(false);
-    }
+      addResult('7 · Server-side revision conflict', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
   };
 
-  const validationPath = async () => {
-    if (!context) { setStatus('Authenticate first'); return; }
-    const assignment = context.activeProjectAssignments[0];
+  const serverValidation = async () => {
+    if (!context) return;
     setRunning(true);
     try {
-      const invalidTime = new Date(Date.now() + 86400000).toISOString();
-      await AttendanceService.checkIn({ context, projectId: assignment.projectId, targetPersonId: context.person.id, targetAssignment: assignment, source: 'SELF', clientOccurredAt: invalidTime, online: false });
-      addResult('11 · Local validation rejection', 'Unexpectedly accepted a future work-date mutation', false);
+      const row = await latestCommand();
+      const payload = JSON.parse(String(row.command_payload_json)) as Record<string, unknown>;
+      const commandId = uuidV4();
+      const invalidPayload = { ...payload, commandId: uuidV4(), eventId: uuidV4() };
+      const response = await rpc({
+        command_id: commandId,
+        device_installation_id: context.device.id,
+        project_id: String(row.project_id),
+        person_id: String(row.person_id),
+        work_date_utc: String(row.work_date_utc),
+        base_revision: Number(row.base_revision),
+        command_type: String(row.command_type),
+        payload: invalidPayload,
+      });
+      const passed = response.status === 'VALIDATION_REJECTED';
+      addResult('8 · Server-side payload validation', JSON.stringify(response), passed);
+      setStatus(passed ? 'SERVER REJECTED INVALID PAYLOAD' : 'SERVER VALIDATION REJECTION NOT PROVEN');
     } catch (error) {
-      addResult('11 · Local validation rejection', error instanceof Error ? error.message : String(error), true);
-    } finally {
-      setRunning(false);
-    }
+      addResult('8 · Server-side payload validation', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
+  };
+
+  const authorizationProbe = async () => {
+    if (!context) return;
+    setRunning(true);
+    try {
+      const assignment = context.activeProjectAssignments.find(item => item.status === 'ACTIVE');
+      if (!assignment) throw new Error('No active project assignment');
+      const commandId = uuidV4();
+      const eventId = uuidV4();
+      const targetPersonId = uuidV4();
+      const payload = {
+        commandId,
+        eventId,
+        projectId: assignment.projectId,
+        personId: targetPersonId,
+        workDateUtc: new Date().toISOString().slice(0, 10),
+        commandType: 'CHECK_IN',
+        projectAssignmentId: uuidV4(),
+        source: 'SELF',
+        clientOccurredAt: nowUtc(),
+        baseRevision: 0,
+      };
+      const response = await rpc({
+        command_id: commandId,
+        device_installation_id: context.device.id,
+        project_id: assignment.projectId,
+        person_id: targetPersonId,
+        work_date_utc: payload.workDateUtc,
+        base_revision: 0,
+        command_type: 'CHECK_IN',
+        payload,
+      });
+      const passed = response.status === 'AUTHORIZATION_REJECTED';
+      addResult('9 · Server authorization boundary', JSON.stringify(response), passed);
+      setStatus(passed ? 'SERVER REJECTED UNAUTHORIZED TARGET AGGREGATE' : 'AUTHORIZATION REJECTION NOT PROVEN');
+    } catch (error) {
+      addResult('9 · Server authorization boundary', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
   };
 
   const lifecycleStress = async () => {
@@ -264,12 +321,38 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       await Promise.all([runtime.start(), runtime.start(), runtime.start()]);
       await Promise.all([runtime.stop(), runtime.stop(), runtime.stop()]);
       await runtime.start();
-      addResult('12 · Lifecycle/race safety', 'Concurrent start/stop calls completed without throwing; runtime restarted successfully.', true);
+      addResult('10 · Sync lifecycle/race safety', 'Concurrent start/stop calls completed without throwing and the runtime restarted successfully.', true);
     } catch (error) {
-      addResult('12 · Lifecycle/race safety', error instanceof Error ? error.message : String(error), false);
-    } finally {
-      setRunning(false);
-    }
+      addResult('10 · Sync lifecycle/race safety', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
+  };
+
+  const revokeAndProbe = async () => {
+    if (!context) return;
+    setRunning(true);
+    try {
+      const service = new DeviceRegistrationService(client);
+      const localDevice = await getLocalDeviceSession(context.userId);
+      if (!localDevice) throw new Error('No authoritative local device session exists');
+      const revoked = await service.revoke(context.userId, localDevice.revision, nowUtc());
+      const row = await latestCommand();
+      const payload = JSON.parse(String(row.command_payload_json)) as Record<string, unknown>;
+      const response = await rpc({
+        command_id: uuidV4(),
+        device_installation_id: revoked.id,
+        project_id: String(row.project_id),
+        person_id: String(row.person_id),
+        work_date_utc: String(row.work_date_utc),
+        base_revision: Number(row.base_revision),
+        command_type: String(row.command_type),
+        payload: { ...payload, commandId: uuidV4(), eventId: uuidV4() },
+      });
+      const passed = response.status === 'DEVICE_REVOKED';
+      addResult('11 · Revoked-device server enforcement', `Device=${revoked.id} · RPC=${JSON.stringify(response)}`, passed);
+      setStatus(passed ? 'REAL RPC REJECTED THE REVOKED DEVICE' : 'REVOKED-DEVICE ENFORCEMENT NOT PROVEN');
+    } catch (error) {
+      addResult('11 · Revoked-device server enforcement', error instanceof Error ? error.message : String(error), false);
+    } finally { setRunning(false); }
   };
 
   const signOut = async () => {
@@ -277,7 +360,6 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
     await authService.signOut();
     setContext(null);
     setStatus('SIGNED OUT');
-    await refreshLocalState();
   };
 
   const passed = results.filter(result => result.passed).length;
@@ -290,44 +372,34 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       </View>
       <Text style={styles.eyebrow}>SITE-SYNC</Text>
       <Text style={styles.title}>REAL RUNTIME</Text>
-      <Text style={styles.subtitle}>Physical acceptance harness for the complete M1.7 sync contract.</Text>
+      <Text style={styles.subtitle}>Acceptance harness using the authenticated app session, durable local state and the real isolated Supabase RPC boundary.</Text>
       <View style={styles.warning}>
         <Text style={styles.warningTitle}>ISOLATED TEST PROJECT ONLY</Text>
-        <Text style={styles.warningBody}>Hard-wired to SITE-SYNC-M17-TEST. No production URL, service-role key, or production mutation is used by this harness.</Text>
+        <Text style={styles.warningBody}>This harness never contains production credentials and never uses the production Supabase project. Authentication is inherited from the app session.</Text>
       </View>
 
-      {!context && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>1 · AUTHENTICATION / CONTEXT</Text>
-          <TextInput autoCapitalize="none" autoCorrect={false} keyboardType="email-address" value={email} onChangeText={setEmail} placeholder="Test account email" placeholderTextColor="#8A94A8" style={styles.input} />
-          <TextInput secureTextEntry value={password} onChangeText={setPassword} placeholder="Test account password" placeholderTextColor="#8A94A8" style={styles.input} />
-          <Pressable style={styles.primary} disabled={running || !dbReady || !email || !password} onPress={login}>
-            <Text style={styles.primaryText}>{running ? 'AUTHENTICATING…' : dbReady ? 'SIGN IN TO ISOLATED PROJECT' : 'INITIALISING LOCAL DATABASE…'}</Text>
-          </Pressable>
-        </View>
-      )}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>PRE-FLIGHT</Text>
+        <Text style={styles.identity}>{context ? context.person.displayName : 'Restoring authenticated session…'}</Text>
+        <Text style={styles.detail}>{context ? `${context.organisation.name} · ${context.activeProjectAssignments[0]?.projectId} · device ${context.device.id}` : status}</Text>
+        <Text style={styles.detail}>{dbReady ? 'SQLite ready' : 'SQLite initialising'}</Text>
+      </View>
 
       {context && (
-        <>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>IDENTITY / PROJECT</Text>
-            <Text style={styles.identity}>{context.person.displayName}</Text>
-            <Text style={styles.detail}>{context.organisation.name} · {context.activeProjectAssignments[0]?.projectId}</Text>
-          </View>
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>2–12 · EXECUTABLE ACCEPTANCE CONTROLS</Text>
-            <Pressable style={styles.primary} disabled={running} onPress={createCheckIn}><Text style={styles.primaryText}>2 · CREATE OFFLINE CHECK-IN</Text></Pressable>
-            <Pressable style={styles.secondary} disabled={running} onPress={captureRestartCheckpoint}><Text style={styles.secondaryText}>3 · CAPTURE RESTART CHECKPOINT</Text></Pressable>
-            <Pressable style={styles.primary} disabled={running} onPress={() => void syncPending()}><Text style={styles.primaryText}>4–6 · RESTORE CONNECTIVITY + SYNC / RECONCILE</Text></Pressable>
-            <Pressable style={styles.secondary} disabled={running} onPress={checkout}><Text style={styles.secondaryText}>7 · OFFLINE CHECK-OUT + TIMESHEET</Text></Pressable>
-            <Pressable style={styles.secondary} disabled={running} onPress={duplicateReplay}><Text style={styles.secondaryText}>9 · REPLAY / IDEMPOTENCY CHECK</Text></Pressable>
-            <Pressable style={styles.secondary} disabled={running} onPress={induceConflict}><Text style={styles.secondaryText}>10 · INDUCE STALE-REVISION CONFLICT</Text></Pressable>
-            <Pressable style={styles.secondary} disabled={running} onPress={() => void syncPending('10 · Conflict response / server-wins')}><Text style={styles.secondaryText}>10 · SYNC CONFLICT COMMAND</Text></Pressable>
-            <Pressable style={styles.secondary} disabled={running} onPress={validationPath}><Text style={styles.secondaryText}>11 · LOCAL VALIDATION REJECTION</Text></Pressable>
-            <Pressable style={styles.secondary} disabled={running} onPress={lifecycleStress}><Text style={styles.secondaryText}>12 · LIFECYCLE START/STOP RACE</Text></Pressable>
-            <Pressable style={styles.tertiary} disabled={running} onPress={signOut}><Text style={styles.tertiaryText}>SIGN OUT / STOP RUNTIME</Text></Pressable>
-          </View>
-        </>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>EXECUTABLE ACCEPTANCE CONTROLS</Text>
+          <Pressable style={styles.primary} disabled={running} onPress={createCheckIn}><Text style={styles.primaryText}>2 · CREATE OFFLINE CHECK-IN</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={captureRestartCheckpoint}><Text style={styles.secondaryText}>3 · CAPTURE RESTART CHECKPOINT</Text></Pressable>
+          <Pressable style={styles.primary} disabled={running} onPress={() => void syncPending()}><Text style={styles.primaryText}>4 · REAL RPC SYNC / RECONCILE</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={checkout}><Text style={styles.secondaryText}>5 · OFFLINE CHECK-OUT / TIMESHEET</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={duplicateReplay}><Text style={styles.secondaryText}>6 · SAME-COMMAND DUPLICATE REPLAY</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={revisionConflict}><Text style={styles.secondaryText}>7 · SERVER REVISION CONFLICT</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={serverValidation}><Text style={styles.secondaryText}>8 · SERVER PAYLOAD VALIDATION</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={authorizationProbe}><Text style={styles.secondaryText}>9 · SERVER AUTHORIZATION REJECTION</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={lifecycleStress}><Text style={styles.secondaryText}>10 · LIFECYCLE START / STOP RACE</Text></Pressable>
+          <Pressable style={styles.secondary} disabled={running} onPress={revokeAndProbe}><Text style={styles.secondaryText}>11 · REVOKE DEVICE / VERIFY RPC REJECTION</Text></Pressable>
+          <Pressable style={styles.tertiary} disabled={running} onPress={signOut}><Text style={styles.tertiaryText}>SIGN OUT / STOP RUNTIME</Text></Pressable>
+        </View>
       )}
 
       <View style={styles.card}>
@@ -369,7 +441,6 @@ const styles = StyleSheet.create({
   warningBody: { marginTop: 6, color: '#735B1C', fontSize: 12, lineHeight: 18 },
   card: { marginTop: 16, padding: 18, borderRadius: 20, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#DCE2EF' },
   cardTitle: { color: '#0D1733', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-  input: { marginTop: 12, borderWidth: 1, borderColor: '#CBD3E3', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, color: '#0D1733', backgroundColor: '#F8F9FC' },
   primary: { marginTop: 10, borderRadius: 14, paddingVertical: 15, alignItems: 'center', backgroundColor: '#0D1733' },
   primaryText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.8, textAlign: 'center' },
   secondary: { marginTop: 10, borderRadius: 14, paddingVertical: 15, alignItems: 'center', backgroundColor: '#F3B33D' },
