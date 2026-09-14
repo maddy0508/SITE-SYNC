@@ -9,7 +9,7 @@ export interface M2OperationalSnapshotInput {
   context: ProjectContextRecord;
   roster: ProjectRosterRecord;
   attendance: AttendanceStateRecord | null;
-  operationalProject: M2OperationalProject | null;
+  operationalProject?: M2OperationalProject | null;
 }
 
 export interface M2OperationalSnapshot {
@@ -62,6 +62,6 @@ export function buildM2OperationalSnapshot({ context, roster, attendance, operat
     attendanceState: attendance?.state ?? 'UNKNOWN',
     attendanceSyncStatus: attendance?.syncStatus ?? null,
     attendanceUpdatedAt: attendance?.updatedAt ?? null,
-    operationalProject,
+    operationalProject: operationalProject ?? null,
   };
 }
