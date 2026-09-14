@@ -6,22 +6,24 @@ const app = fs.readFileSync(path.join(root, 'src/attendance/M17RealRuntimeQaScre
 const workflow = fs.readFileSync(path.join(root, '..', '.github/workflows/m17-android-build.yml'), 'utf8');
 
 const required = [
-  ['real isolated authentication', /authService\.signIn\(/],
+  ['real isolated authenticated session', /authService\.restoreSession\(\)/],
   ['real device registration', /DeviceRegistrationService/],
   ['offline durable attendance', /OFFLINE_PENDING_VERIFICATION/],
   ['repository observation', /subscribeRepositoryChanges/],
   ['real RPC sync', /requestManualSync\(\)/],
-  ['conflict evidence', /REVISION_CONFLICT/],
+  ['same-command duplicate replay', /DUPLICATE_ACCEPTED/],
+  ['server-side conflict evidence', /REVISION_CONFLICT/],
   ['revoked-device evidence', /DEVICE_REVOKED/],
-  ['authorization evidence', /AUTHORIZATION_REJECTED/],
+  ['server authorization evidence', /AUTHORIZATION_REJECTED/],
+  ['server validation evidence', /VALIDATION_REJECTED/],
   ['retry classification', /RETRYABLE|retryable/i],
   ['provenance artifact', /SITE-SYNC-M1\.7-QA-PROVENANCE/],
 ];
 
 const forbidden = [
-  ['tester-entered credentials as the required QA provisioning path', /TextInput[^\n]*(?:Test account email|Test account password)/],
-  ['locally fabricated conflict as acceptance evidence', /setLocalState\(|UPDATE attendance_state SET current_revision/],
-  ['local validation substituted for server validation', /Local validation rejection/],
+  ['tester-entered credentials as the required QA provisioning path', /TextInput|signIn\(email/],
+  ['locally fabricated conflict as acceptance evidence', /UPDATE attendance_state SET current_revision|setLocalState\(/],
+  ['local validation substituted for server validation', /Local validation rejection|future work-date mutation/],
   ['duplicate replay without explicit same-command RPC delivery', /latest=\$\{String\(row\.commandId\)/],
 ];
 
@@ -44,7 +46,10 @@ if (!/sha256sum|shasum -a 256/.test(workflow)) {
   failed = true;
 }
 
-if (!/test -z|grep.*production|production.*forbidden/i.test(workflow)) {
+const productionGuard = /pjosqguzbsteaoptaifw|SITE-SYNC\.supabase\.co/.test(workflow)
+  && /Reject production configuration/.test(workflow)
+  && /grep -R/.test(workflow);
+if (!productionGuard) {
   console.error('M17_CAPABILITY_FAIL: explicit production-configuration guard missing');
   failed = true;
 }
