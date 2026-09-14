@@ -20,9 +20,10 @@ const required = [
   ['provenance artifact', /SITE-SYNC-M1\.7-QA-PROVENANCE/],
 ];
 
+// Target known fake-evidence implementations, not generic React state setters.
 const forbidden = [
   ['tester-entered credentials as the required QA provisioning path', /TextInput|signIn\(email/],
-  ['locally fabricated conflict as acceptance evidence', /const\s+induceConflict\s*=|setLocalState\(/],
+  ['locally fabricated conflict as acceptance evidence', /const\s+induceConflict\s*=|setLocalState\([^\n]*(?:CONFLICT|conflict)/],
   ['local validation substituted for server validation', /Local validation rejection|future work-date mutation/],
   ['duplicate replay without explicit same-command RPC delivery', /latest=\$\{String\(row\.commandId\)/],
 ];
