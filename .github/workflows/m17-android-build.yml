@@ -90,3 +90,5 @@ jobs:
             sitesync/android/app/build/outputs/apk/release/SITE-SYNC-M1.7-QA-PROVENANCE.txt
           if-no-files-found: error
           retention-days: 7
+
+# CI trigger: keep this workflow eligible for branch-push APK production.
