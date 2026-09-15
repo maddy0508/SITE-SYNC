@@ -9,6 +9,7 @@ import type {
 } from '../domain/localPersistence';
 import { M1_TIMESHEET_POLICY } from '../domain/localPersistence';
 import { withTransaction, validateUtcTimestamp, getProjectRoster } from '../database/localPersistence';
+import { emitRepositoryChange } from '../database/repositoryChangeBus';
 import { authorizeAttendance, targetAssignmentMatchesTrustedRoster } from './attendanceAuthorization';
 import { buildAttendanceCommand, type AttendanceCommand } from './attendanceCommands';
 
@@ -146,7 +147,7 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
   const eventId = request.eventId ?? uuidV4();
   const eventType = request.action === 'CHECK_IN' ? 'ATTENDANCE_CHECK_IN' : 'ATTENDANCE_CHECK_OUT';
 
-  return withTransaction(async (tx) => {
+  const result = await withTransaction(async (tx) => {
     const existingResult = await tx.executeSql(
       `SELECT project_id as projectId, person_id as personId, work_date_utc as workDateUtc,
         organisation_id as organisationId, company_id as companyId, project_assignment_id as projectAssignmentId,
@@ -306,6 +307,12 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
 
     return { command: commandRecord, event, state: nextState, timesheet };
   });
+
+  emitRepositoryChange({ kind: 'command', projectId: result.command.projectId, personId: result.command.personId, commandId: result.command.commandId, at: result.command.updatedAt });
+  emitRepositoryChange({ kind: 'attendance', projectId: result.state.projectId, personId: result.state.personId, commandId: result.command.commandId, at: result.state.updatedAt });
+  emitRepositoryChange({ kind: 'timesheet', projectId: result.timesheet.projectId, personId: result.timesheet.personId, commandId: result.command.commandId, at: result.timesheet.updatedAt });
+
+  return result;
 }
 
 export const AttendanceService = {
