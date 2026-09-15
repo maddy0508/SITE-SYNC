@@ -385,7 +385,7 @@ export function M17RealRuntimeQaScreen({ onBack, authService, client, runtime }:
       <View style={styles.card}>
         <Text style={styles.cardTitle}>PRE-FLIGHT</Text>
         <Text style={styles.identity}>{context ? context.person.displayName : 'Restoring authenticated session…'}</Text>
-        <Text style={styles.detail}>{context ? `${context.organisation.name} · ${context.activeProjectAssignments[0]?.projectId} · device ${context.device.id}` : status}</Text>
+        <Text style={styles.detail}>{context ? `${context.organisation.name} · ${context.activeProjectAssignments[0]?.projectId} · device ${requireDevice(context).id}` : status}</Text>
         <Text style={styles.detail}>{dbReady ? 'SQLite ready' : 'SQLite initialising'}</Text>
       </View>
 
