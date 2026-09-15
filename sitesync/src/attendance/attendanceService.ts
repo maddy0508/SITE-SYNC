@@ -9,6 +9,7 @@ import type {
 } from '../domain/localPersistence';
 import { M1_TIMESHEET_POLICY } from '../domain/localPersistence';
 import { withTransaction, validateUtcTimestamp, getProjectRoster } from '../database/localPersistence';
+import { emitRepositoryChange } from '../database/repositoryChangeBus';
 import { authorizeAttendance, targetAssignmentMatchesTrustedRoster } from './attendanceAuthorization';
 import { buildAttendanceCommand, type AttendanceCommand } from './attendanceCommands';
 
@@ -52,10 +53,12 @@ export interface AttendanceMutationResult {
   timesheet: TimesheetRecord;
 }
 
-let idSequence = 0;
-function defaultId(prefix: string): string {
-  idSequence += 1;
-  return `${prefix}-${Date.now().toString(36)}-${idSequence.toString(36)}`;
+function uuidV4(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
 }
 
 function mutationSyncStatus(online: boolean): SyncStatus {
@@ -126,9 +129,6 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
     throw new AttendanceError('INVALID_CONTEXT', 'clientOccurredAt must be a valid UTC timestamp');
   }
 
-  // For QR attendance, the caller-provided assignment is only an input hint.
-  // The mutation boundary independently checks it against trusted cached roster
-  // data before authorization can grant mutation authority.
   if (request.source === 'QR_SCAN') {
     const trustedRoster = await getProjectRoster(request.projectId, request.targetPersonId);
     if (!request.targetAssignment || !trustedRoster || !targetAssignmentMatchesTrustedRoster(request.targetAssignment, trustedRoster)) {
@@ -143,11 +143,11 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
 
   const targetAssignment = authorization.targetAssignment;
   const personId = targetAssignment.personId;
-  const commandId = request.commandId ?? defaultId('cmd');
-  const eventId = request.eventId ?? defaultId('event');
+  const commandId = request.commandId ?? uuidV4();
+  const eventId = request.eventId ?? uuidV4();
   const eventType = request.action === 'CHECK_IN' ? 'ATTENDANCE_CHECK_IN' : 'ATTENDANCE_CHECK_OUT';
 
-  return withTransaction(async (tx) => {
+  const result = await withTransaction(async (tx) => {
     const existingResult = await tx.executeSql(
       `SELECT project_id as projectId, person_id as personId, work_date_utc as workDateUtc,
         organisation_id as organisationId, company_id as companyId, project_assignment_id as projectAssignmentId,
@@ -307,6 +307,12 @@ async function mutate(request: AttendanceMutationRequest): Promise<AttendanceMut
 
     return { command: commandRecord, event, state: nextState, timesheet };
   });
+
+  emitRepositoryChange({ kind: 'command', projectId: result.command.projectId, personId: result.command.personId, commandId: result.command.commandId, at: result.command.updatedAt });
+  emitRepositoryChange({ kind: 'attendance', projectId: result.state.projectId, personId: result.state.personId, commandId: result.command.commandId, at: result.state.updatedAt });
+  emitRepositoryChange({ kind: 'timesheet', projectId: result.timesheet.projectId, personId: result.timesheet.personId, commandId: result.command.commandId, at: result.timesheet.updatedAt });
+
+  return result;
 }
 
 export const AttendanceService = {

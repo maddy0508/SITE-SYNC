@@ -1,0 +1,54 @@
+name: M1.7 real runtime verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'm17-real-app-runtime'
+    paths:
+      - 'sitesync/src/**'
+      - 'sitesync/__tests__/m17RealSupabaseRuntime.integration.test.ts'
+      - 'sitesync/package.json'
+      - 'sitesync/package-lock.json'
+      - '.github/workflows/m17-real-runtime-verify.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  real-supabase-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sitesync
+    env:
+      M17_SUPABASE_URL: https://fuaiodkyaqfandbenuol.supabase.co
+      M17_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.M17_SUPABASE_PUBLISHABLE_KEY }}
+      M17_SUPABASE_EMAIL: ${{ secrets.M17_SUPABASE_EMAIL }}
+      M17_SUPABASE_PASSWORD: ${{ secrets.M17_SUPABASE_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          cache: npm
+          cache-dependency-path: sitesync/package-lock.json
+      - run: npm ci --ignore-scripts
+      - name: Report credential gate
+        id: credential-gate
+        shell: bash
+        run: |
+          if [[ -n "$M17_SUPABASE_EMAIL" && -n "$M17_SUPABASE_PASSWORD" && -n "$M17_SUPABASE_PUBLISHABLE_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "M1.7 isolated Supabase credentials are configured."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "M1.7 real Supabase test is SKIPPED: isolated credentials are not configured."
+          fi
+      - name: Run real Supabase runtime boundary
+        if: steps.credential-gate.outputs.available == 'true'
+        run: npx jest __tests__/m17RealSupabaseRuntime.integration.test.ts --runInBand
+      - name: Keep workflow green while credential gate is pending
+        if: steps.credential-gate.outputs.available != 'true'
+        run: echo "Integration execution remains an explicit pending gate; no production credentials are permitted."

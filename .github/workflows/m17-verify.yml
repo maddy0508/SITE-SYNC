@@ -6,6 +6,7 @@ on:
       - 'mckellarmaddy/mmm-35-m17-sync-engine-foundation*'
       - 'm17-server-transport'
       - 'm17-runtime-integration'
+      - 'm17-real-app-runtime'
     paths:
       - 'sitesync/**'
       - '.github/workflows/m17-verify.yml'

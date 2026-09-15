@@ -22,6 +22,7 @@
     "react-native-qrcode-svg": "6.3.22",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-svg": "15.13.0",
+    "react-native-url-polyfill": "4.0.0",
     "react-native-vision-camera": "5.2.2",
     "react-native-vision-camera-barcode-scanner": "5.2.2"
   },

@@ -23,42 +23,27 @@ function clientWith(overrides: Record<string, unknown>) {
 describe('AuthService', () => {
   it('restores an existing session', async () => {
     const client = clientWith({ getSession: jest.fn(async () => ({ data: { session }, error: null })) });
-
     await expect(new AuthService(client as never).restoreSession()).resolves.toBe(session);
   });
 
   it('rejects when there is no session', async () => {
     const client = clientWith({ getSession: jest.fn(async () => ({ data: { session: null }, error: null })) });
-
     await expect(new AuthService(client as never).restoreSession()).rejects.toMatchObject({ code: 'NO_SESSION' });
   });
 
   it('signs in with password and requires a returned session', async () => {
-    const client = clientWith({
-      signInWithPassword: jest.fn(async () => ({ data: { session }, error: null })),
-    });
-
+    const client = clientWith({ signInWithPassword: jest.fn(async () => ({ data: { session }, error: null })) });
     await expect(new AuthService(client as never).signIn('worker@example.com', 'password')).resolves.toBe(session);
-    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({
-      email: 'worker@example.com',
-      password: 'password',
-    });
+    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({ email: 'worker@example.com', password: 'password' });
   });
 
   it('maps auth failures to a typed error', async () => {
-    const client = clientWith({
-      signInWithPassword: jest.fn(async () => ({ data: { session: null }, error: { message: 'Invalid login credentials' } })),
-    });
-
-    await expect(new AuthService(client as never).signIn('worker@example.com', 'wrong')).rejects.toMatchObject({
-      code: 'AUTH_FAILED',
-      message: 'Invalid login credentials',
-    });
+    const client = clientWith({ signInWithPassword: jest.fn(async () => ({ data: { session: null }, error: { message: 'Invalid login credentials' } })) });
+    await expect(new AuthService(client as never).signIn('worker@example.com', 'wrong')).rejects.toMatchObject({ code: 'AUTH_FAILED', message: 'Invalid login credentials' });
   });
 
   it('signs out through Supabase', async () => {
     const client = clientWith({ signOut: jest.fn(async () => ({ error: null })) });
-
     await new AuthService(client as never).signOut();
     expect(client.auth.signOut).toHaveBeenCalledTimes(1);
   });
@@ -67,9 +52,17 @@ describe('AuthService', () => {
     const unsubscribe = jest.fn();
     const onAuthStateChange = jest.fn((_callback: (userId: string | null) => void) => ({ data: { subscription: { unsubscribe } } }));
     const service = new AuthService({ auth: { onAuthStateChange } } as never);
-
     const remove = service.subscribeUser((userId) => userId);
+    expect(onAuthStateChange).toHaveBeenCalledTimes(1);
+    remove();
+    expect(unsubscribe).toHaveBeenCalledTimes(1);
+  });
 
+  it('provides the lifecycle subscribe shape as an alias to subscribeUser', () => {
+    const unsubscribe = jest.fn();
+    const onAuthStateChange = jest.fn((_callback: (userId: string | null) => void) => ({ data: { subscription: { unsubscribe } } }));
+    const service = new AuthService({ auth: { onAuthStateChange } } as never);
+    const remove = service.subscribe(() => undefined);
     expect(onAuthStateChange).toHaveBeenCalledTimes(1);
     remove();
     expect(unsubscribe).toHaveBeenCalledTimes(1);

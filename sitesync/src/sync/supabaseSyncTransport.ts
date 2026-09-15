@@ -4,7 +4,7 @@ export interface SupabaseRpcClient {
   rpc(
     functionName: string,
     args: Record<string, unknown>,
-  ): Promise<{ data: unknown; error: { message: string; code?: string } | null }>;
+  ): PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
