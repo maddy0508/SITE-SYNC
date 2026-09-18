@@ -3,6 +3,12 @@ import { SyncWorker } from '../src/sync/syncWorker';
 import type { SyncTransport } from '../src/sync/syncTransport';
 
 const NOW = '2026-09-12T00:00:00.000Z';
+
+let testDatabaseSequence = 0;
+function nextTestDatabaseName(): string {
+  testDatabaseSequence += 1;
+  return `m17-integration-${Date.now()}-${testDatabaseSequence}.db`;
+}
 const DEVICE_CONTEXT = { getDeviceInstallationId: jest.fn().mockResolvedValue('device-1') };
 const PAYLOAD = JSON.stringify({
   commandId: 'cmd-1', eventId: 'event-1', projectAssignmentId: 'assignment-1', projectId: 'project-1', personId: 'person-1',
@@ -43,7 +49,7 @@ async function seedAttendanceProjection(commandId: string, eventId: string, revi
 }
 
 describe('M1.7 controlled sync integration', () => {
-  beforeEach(async () => initializeDatabase(`m17-integration-${Date.now()}-${Math.random()}.db`));
+  beforeEach(async () => initializeDatabase(nextTestDatabaseName()));
   afterEach(async () => closeDatabase());
 
   it('synchronizes a pending command and preserves command history', async () => {
