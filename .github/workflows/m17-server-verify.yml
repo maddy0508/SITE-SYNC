@@ -91,6 +91,41 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260815000000_init_identity_tenancy.sql
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260815000001_init_device_installations.sql
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -c "GRANT SELECT, INSERT, UPDATE ON public.device_installations TO authenticated;"
+      - name: Apply existing M1.4 migrations
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260817000000_m14_identity_rls.sql
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260817000001_m14_identity_rls_fix.sql
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260817000002_m14_identity_grants.sql
+      - name: Run Stage-2 M1.4 baseline RED
+        id: stage2_red
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set +e
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/tests/stage2_m14_baseline_red.sql 2>&1 | tee stage2-m14-red.txt
+          status=${PIPESTATUS[0]}
+          {
+            echo "stage2_status=${status}"
+            echo "postgres_image=postgres:16"
+            echo "test=sitesync/supabase/tests/stage2_m14_baseline_red.sql"
+            echo "policy=project_assignments_select_authorised"
+            echo "helper=current_user_project_ids"
+            echo "expected=inactive-membership assignment denied"
+            echo "observed_exit=${status}"
+          } >> stage2-m14-red.txt
+          sha256sum stage2-m14-red.txt | tee stage2-m14-red.sha256
+          exit ${status}
+      - name: Upload Stage-2 RED evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stage2-m14-red
+          path: |
+            stage2-m14-red.txt
+            stage2-m14-red.sha256
+          if-no-files-found: error
       - name: Apply all M1.7 server migrations
         env:
           PGPASSWORD: postgres
