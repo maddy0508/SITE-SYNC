@@ -51,8 +51,8 @@ GRANT SELECT ON public.company_memberships TO authenticated;
 SET LOCAL ROLE authenticated;
 SET LOCAL request.jwt.claim.sub = '51111111-1111-1111-1111-111111111111';
 
-echo 'STAGE2_RED_CASE=inactive_membership_active_assignment'
-echo 'STAGE2_RED_EXPECTED=target_assignment_not_visible'
+\echo 'STAGE2_RED_CASE=inactive_membership_active_assignment'
+\echo 'STAGE2_RED_EXPECTED=target_assignment_not_visible'
 
 SELECT
   count(*) AS visible_target_assignment_count
