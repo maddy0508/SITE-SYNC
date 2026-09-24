@@ -31,23 +31,27 @@ INSERT INTO public.project_assignments (id, organisation_id, project_id, company
 INSERT INTO public.device_installations (id, user_id, installation_key, status) VALUES
  ('caaaaaaa-aaaa-aaaa-aaaa-500000000001','31111111-1111-1111-1111-111111111111','adv-device','ACTIVE') ON CONFLICT DO NOTHING;
 
-SET LOCAL ROLE authenticated;
-SET LOCAL request.jwt.claim.sub = '31111111-1111-1111-1111-111111111111';
-
 -- Pilot regression: an ACTIVE project assignment must not remain visible through
 -- RLS when its linked company membership is INACTIVE.
+RESET ROLE;
 UPDATE public.company_memberships
 SET status = 'INACTIVE'
 WHERE id = 'caaaaaaa-aaaa-aaaa-aaaa-200000000001';
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '31111111-1111-1111-1111-111111111111';
 
 SELECT count(*) = 0 AS inactive_membership_assignment_hidden
 FROM public.project_assignments
 WHERE id = 'caaaaaaa-aaaa-aaaa-aaaa-400000000001';
 
--- Restore for the remaining adversarial cases; the outer transaction also rolls back.
+RESET ROLE;
 UPDATE public.company_memberships
 SET status = 'ACTIVE'
 WHERE id = 'caaaaaaa-aaaa-aaaa-aaaa-200000000001';
+
+SET LOCAL ROLE authenticated;
+SET LOCAL request.jwt.claim.sub = '31111111-1111-1111-1111-111111111111';
 
 -- SELF cannot target another company/person aggregate; the hardened authorization
 -- boundary rejects the request before target-specific mutation logic is reached.
