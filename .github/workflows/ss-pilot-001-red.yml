@@ -1,0 +1,75 @@
+name: SS-PILOT-001 RED evidence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'sitesync/supabase/migrations/**'
+      - 'sitesync/supabase/tests/m17_sync_adversarial.sql'
+      - '.github/workflows/ss-pilot-001-red.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  red:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sitesync_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d sitesync_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare Supabase-compatible auth harness
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE ROLE anon NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (id uuid PRIMARY KEY, email text);
+          CREATE FUNCTION auth.uid() RETURNS uuid
+          LANGUAGE sql STABLE
+          AS $$ SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+          SQL
+      - name: Apply identity and RLS baseline
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260815000000_init_identity_tenancy.sql
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260815000001_init_device_installations.sql
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260817000000_m14_identity_rls.sql
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/migrations/20260817000002_m14_identity_grants.sql
+          for migration in sitesync/supabase/migrations/20260912*.sql; do
+            case "$migration" in
+              *m17_sync_*) psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f "$migration" ;;
+            esac
+          done
+      - name: Run adversarial SQL regression and capture RED output
+        id: red
+        continue-on-error: true
+        env:
+          PGPASSWORD: postgres
+        run: |
+          set +e
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/tests/m17_sync_adversarial.sql > red-output.txt 2>&1
+          status=$?
+          printf 'exit_code=%s\n' "$status" | tee -a red-output.txt
+          test "$status" -ne 0
+      - name: Upload RED evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ss-pilot-001-red-output
+          path: red-output.txt
