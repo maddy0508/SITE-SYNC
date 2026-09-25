@@ -21,7 +21,21 @@ BEGIN
     JOIN pg_class t ON t.oid = c.conrelid
     WHERE t.relname = 'sitesync_sync_command_receipt' AND c.contype = 'p'
   ) THEN RAISE EXCEPTION 'command idempotency key missing'; END IF;
-END $$;
+END $;
+
+DO $
+DECLARE default_expr TEXT;
+BEGIN
+  SELECT pg_get_expr(d.adbin, d.adrelid) INTO default_expr
+  FROM pg_attrdef d
+  JOIN pg_attribute a ON a.attrelid = d.adrelid AND a.attnum = d.adnum
+  JOIN pg_class t ON t.oid = a.attrelid
+  WHERE t.relname = 'sitesync_sync_command_receipt'
+    AND a.attname = 'command_id';
+  IF default_expr IS NOT NULL THEN
+    RAISE EXCEPTION 'command idempotency key must be client-generated; unexpected default: %', default_expr;
+  END IF;
+END $;
 
 INSERT INTO auth.users (id, email) VALUES
  ('11111111-1111-1111-1111-111111111111', 'actor-a@test.invalid'),

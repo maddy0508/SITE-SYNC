@@ -100,9 +100,37 @@ jobs:
               *m17_sync_*) psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f "$migration" ;;
             esac
           done
+      - name: AC-06 — Canonical schema verification
+        env:
+          PGPASSWORD: postgres
+        continue-on-error: true
+        run: |
+          set +e
+          psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/tests/s01_ac06_canonical_schema.sql 2>&1 | tee /tmp/s01_ac06_output.txt
+          psql_status=${PIPESTATUS[0]}
+          echo "AC-06 psql exit: ${psql_status}"
+          exit "${psql_status}"
+
       - name: Run M1.7 SQL acceptance suite
         env:
           PGPASSWORD: postgres
         run: |
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/tests/m17_sync_server.sql
           psql -h 127.0.0.1 -U postgres -d sitesync_test -v ON_ERROR_STOP=1 -f sitesync/supabase/tests/m17_sync_adversarial.sql
+
+      - name: Capture composed schema
+        if: always()
+        env:
+          PGPASSWORD: postgres
+        run: |
+          pg_dump -h 127.0.0.1 -U postgres -d sitesync_test --schema-only --no-owner --no-privileges > /tmp/s01_composed_schema.sql
+
+      - name: Upload S-01 SQL evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s01-sql-evidence
+          path: |
+            /tmp/s01_ac06_output.txt
+            /tmp/s01_composed_schema.sql
+          if-no-files-found: warn
