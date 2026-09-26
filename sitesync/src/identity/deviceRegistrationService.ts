@@ -22,6 +22,8 @@ export interface DeviceRegistrationInput {
 
 export interface DeviceInstallation {
   id: string;
+  /** Compatibility alias for transport/QA surfaces; equal to id and non-enumerable at runtime. */
+  readonly deviceInstallationId: string;
   userId: string;
   installationKey: string;
   deviceName: string | null;
@@ -102,7 +104,9 @@ export class DeviceRegistrationService {
     if (userId !== authenticatedUserId) throw new DeviceRegistrationServiceError('CROSS_USER_ACCESS', 'Device installation does not belong to authenticated user');
     const status = row.status as DeviceInstallation['status'];
     if (status !== 'ACTIVE' && status !== 'REVOKED') throw new DeviceRegistrationServiceError('INVALID_LIFECYCLE', `Unsupported device status: ${String(row.status)}`);
-    return { id: String(row.id), userId, installationKey: String(row.installation_key), deviceName: row.device_name == null ? null : String(row.device_name), appVersion: row.app_version == null ? null : String(row.app_version), osVersion: row.os_version == null ? null : String(row.os_version), status, createdAt: this.normalizeTimestamp(row.created_at, 'created_at'), lastSeenAt: this.normalizeTimestamp(row.last_seen_at, 'last_seen_at'), revokedAt: row.revoked_at == null ? null : this.normalizeTimestamp(row.revoked_at, 'revoked_at') };
+    const installation = { id: String(row.id), userId, installationKey: String(row.installation_key), deviceName: row.device_name == null ? null : String(row.device_name), appVersion: row.app_version == null ? null : String(row.app_version), osVersion: row.os_version == null ? null : String(row.os_version), status, createdAt: this.normalizeTimestamp(row.created_at, 'created_at'), lastSeenAt: this.normalizeTimestamp(row.last_seen_at, 'last_seen_at'), revokedAt: row.revoked_at == null ? null : this.normalizeTimestamp(row.revoked_at, 'revoked_at') } as DeviceInstallation;
+    Object.defineProperty(installation, 'deviceInstallationId', { value: installation.id, enumerable: false, configurable: false, writable: false });
+    return installation;
   }
 
   private normalizeTimestamp(value: unknown, field: string): string {
