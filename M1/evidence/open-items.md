@@ -127,3 +127,28 @@ None raised.
 
 None. AMB-002 is resolved; all other records are dispositions or deferred
 probes with named target milestones.
+
+## DEFERRED — AC-11 physical durable engine
+
+§6.10 durable-intent semantics for the acknowledgement offline
+mutation are implemented and tested (atomic commit, queue entry,
+CommandReceipt, restart-boundary probe P12, sync-time rejection
+preservation). The physical durable storage engine is a §8.J
+application-shell decision, currently deferred.
+
+Resolved by: <milestone>. Recommended: M10 — Offline / Sync /
+Recovery (§11), which is the natural home for hardening physical
+durability across the sync surface.
+
+P12 tests the restart boundary at the domain level. Distinction
+recorded explicitly: P12 **simulates** the restart boundary — it
+verifies that the durable local fact and queue entry persist intact
+in the store and are transmitted exactly once afterward, but it does
+not serialise/rehydrate the store and does not physically restart the
+process. Physical persistence durability (surviving an actual process
+or device restart) is a property of the future storage adapter and is
+not claimed by P12 or by M1.
+
+This deferral does not weaken AC-11's semantic requirements; it
+records that the physical persistence adapter is a future §8.J
+decision.

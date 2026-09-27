@@ -137,3 +137,20 @@ Device, Worker, Project (entry state `draft` only), Site (entry state
 WorkerLifecycleEvent, Invitation, CapabilityGrant, DocumentRevision,
 InductionCompletion, Acknowledgement, WorkerQrIdentityEvent, LifecycleEvent
 (assignment-ending on offboarding only), CommandReceipt, CommandOutcome.
+
+## Test-defect fix record — m1-ac-14
+
+- m1-ac-14 test amended at: (this commit — see git log; the evidence
+  commit cannot contain its own SHA)
+- Reason: the range diff `EP-3.0..HEAD` included the authorised EP-4.0
+  freeze commits (967b3617, 1bfdd923, 0ac087ee — AMB-002 resolution
+  governance), mistaking them for M1 implementation. Excluded via
+  literal-SHA whitelist, same pattern as m0-ac-10.
+- Assertion unchanged: no new M2+ entity, behaviour, migration, API
+  surface, operational workflow, or authoritative persistence is
+  introduced by M1. Only the diff mechanism is corrected.
+- Category: test defect fix (same category as the M0 m0-ac-03
+  split()[1] fix), not a new INV-C event.
+- AC-14 verification remains at 2a4d4ae under EP-3.0 (comparative-negative;
+  comparison baseline = M1-start commit 4739e9d). Post-fix, the test also
+  passes at the current HEAD with the freeze commits excluded.

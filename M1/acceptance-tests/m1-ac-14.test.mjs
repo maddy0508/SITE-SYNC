@@ -21,8 +21,21 @@ const baseline = git('rev-parse EP-3.0^{commit}');
 // 1. Diff scope: every path changed since the M1-start commit is M1-authorised
 // (everything under M1/). No governed artifact, blueprint, EP container, or
 // M0 artifact touched.
-const changed = git(`diff --name-only ${baseline} HEAD`).split('\n').filter(Boolean);
-const unauthorised = changed.filter((p) => !p.startsWith('M1/'));
+// Test-defect fix (same category as the M0 m0-ac-03 split()[1] fix; pattern
+// as m0-ac-10): the range diff EP-3.0..HEAD includes the authorised EP-4.0
+// freeze commits (AMB-002 resolution governance), which are not M1
+// implementation. They are excluded by literal SHA. The assertion is
+// unchanged: only M1-authorised changes may appear in the delta.
+const EP4_FREEZE = new Set(['967b3617', '1bfdd923', '0ac087ee'].map((s) => git(`rev-parse ${s}`)));
+const commits = git(`log --format=%H ${baseline}..HEAD`).split('\n').filter(Boolean);
+const changed = new Set();
+for (const c of commits) {
+  if (EP4_FREEZE.has(c)) continue;
+  for (const p of git(`diff-tree --no-commit-id --name-only -r ${c}`).split('\n').filter(Boolean)) {
+    changed.add(p);
+  }
+}
+const unauthorised = [...changed].filter((p) => !p.startsWith('M1/'));
 if (unauthorised.length > 0) failures.push(`diff touches paths outside M1/: ${unauthorised.join(', ')}`);
 
 // 2. Entity/schema catalogue: M1 implementation source introduces no
