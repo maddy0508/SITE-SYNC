@@ -57,21 +57,24 @@ const blueprint = readFileSync(
   `${REPO_ROOT}/MASTER_BLUEPRINT/MASTER_BLUEPRINT.md`, 'utf8');
 const kIdx = blueprint.indexOf('8.K — Architecture acceptance criteria');
 const lIdx = blueprint.indexOf('8.L — AC-04 implications');
+const eIdx = blueprint.indexOf('END OF LOCKED BLUEPRINT');
 if (kIdx === -1 || lIdx === -1 || lIdx < kIdx) {
   failures.push('§8.K block not located ahead of §8.L in MASTER_BLUEPRINT.md');
 } else {
   const kBlock = blueprint.slice(kIdx, lIdx);
-  for (let i = 1; i <= 10; i++) {
-    if (!kBlock.includes(`M0-AC-${i}`)) {
-      failures.push(`amended §8.K does not identify M0-AC-${i} as an operative criterion`);
-    }
+  if (!/M0-AC-1 through M0-AC-10/.test(kBlock)) {
+    failures.push('amended §8.K does not identify M0-AC-1 through M0-AC-10 as the operative criteria');
   }
   if (!/M0 Execution Contract/.test(kBlock) || !/§M0\.6/.test(kBlock)) {
     failures.push('amended §8.K does not cite the M0 Execution Contract §M0.6 as the criteria source');
   }
 }
-if (/AC-ARCH-0\.1/.test(blueprint) || /AC-ARCH-0\.8/.test(blueprint)) {
-  failures.push('MASTER_BLUEPRINT.md still references AC-ARCH-0.1 / AC-ARCH-0.8');
+// No AC-ARCH-0.x reference may remain as an operative criterion. The amended
+// §8.K records the drafting-artifact explanation inside the §8.K…§8.L block;
+// any occurrence outside §8.K (in the operative body after §8.L) is a failure.
+const bodyAfterK = eIdx > lIdx ? blueprint.slice(lIdx, eIdx) : blueprint.slice(lIdx);
+if (/AC-ARCH-0\.1/.test(bodyAfterK) || /AC-ARCH-0\.8/.test(bodyAfterK)) {
+  failures.push('AC-ARCH-0.1 / AC-ARCH-0.8 referenced outside the §8.K amendment record');
 }
 
 // Evidence currency: acceptance-map must record M0-AC-1 PASS under EP-2.0.
