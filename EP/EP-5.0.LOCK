@@ -1,0 +1,14 @@
+EP Version:          EP-5.0
+Frozen:              2026-09-28
+Frozen by:           Maddy McKellar
+Manifest SHA-256:    ef9096befdd9722de19eaded295c997d2187596a9fb48f6155d914a6b33b9e9d
+Historical baseline: f90b77ab73cb7ae20b1084ad94fb5bc159afa841
+M2 execution baseline: cfda19f0e5d8eeb1af1407a097660819efbbdb31
+Supersedes:          EP-4.0
+Approval note:       EP-5.0 supersedes EP-4.0. Adds M2 Execution
+                     Contract v1.0.3. M1 formally accepted at
+                     f8fe895. EP-1.0 through EP-4.0 remain
+                     historically valid and unchanged. Modifications
+                     permitted only via EP-6.0 with human approval.
+                     Container identity is the Git tag EP-5.0, not a
+                     field in this file.
