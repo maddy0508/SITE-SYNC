@@ -56,9 +56,8 @@ Re-verification under EP-2.0 (INV-C sequence):
   (M0-AC-1 row not PASS; EP-2.0 not recorded). Verified by executing
   `node M0/acceptance-tests/m0-ac-01.test.mjs` → exit 1 with exactly those
   two failures.
-- Implementation (evidence update) commit: recorded below; the test passes at
-  that commit.
-- Ancestry: `git merge-base --is-ancestor fc536ef <impl>` → exit 0.
+- Implementation (evidence update) commit: 22ff5d38cc6adf2ff5da4cd965acd6104ddf68fd; the test passes at that commit.
+- Ancestry: `git merge-base --is-ancestor fc536ef487e10f39f2dec820eb5111cbca8c303b 22ff5d38cc6adf2ff5da4cd965acd6104ddf68fd` → exit 0.
 
 Operative package: EP-2.0 (tag → 276c7994b5c0cbfd88ed4d5cb4587a7bd46a0adb).
 EP-1.0 (tag → db8a7d35002c461853c88ad78ea0523319a6251e) is historical,

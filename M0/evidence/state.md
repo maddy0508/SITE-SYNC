@@ -18,8 +18,7 @@ tracking).
   fc536ef487e10f39f2dec820eb5111cbca8c303b (m0-ac-01 transformed for EP-2.0)
 - Implementation (artifact) commit: a9f3c8543f9a0c289b60a7c627fe8a9b79378322
 - Evidence commit: c468dd8761b1fdcfd88685d6f5b74b52b0fed4d4
-- AMB-001 re-verification evidence commit: HEAD of main at M0 close; SHA
-  reported in the M0 final report and reproducible via `git rev-parse HEAD`.
+- AMB-001 re-verification evidence commit: 22ff5d38cc6adf2ff5da4cd965acd6104ddf68fd
 - Working tree: clean at every commit boundary (verified with
   `git status --porcelain` → empty).
 
