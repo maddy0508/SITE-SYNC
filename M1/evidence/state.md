@@ -102,3 +102,11 @@ node M1/evidence/adversarial-probes.mjs # ALL PROBES PASS
 git merge-base --is-ancestor 1d2afc5 HEAD   # test precedes impl (exit 0)
 git merge-base --is-ancestor b79d312 HEAD   # test precedes impl (exit 0)
 ```
+
+## Gate decision
+
+    M1 gate: ACCEPTED
+    Accepted by: Maddy McKellar
+    Acceptance date: 2026-09-28
+    Operative package at close: EP-4.0
+    M1 final evidence commit: cfda19f0e5d8eeb1af1407a097660819efbbdb31
