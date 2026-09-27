@@ -38,8 +38,9 @@ execute(s, { type: 'IssueQr', actor: { workerId: admin.id }, deviceId: 'dev-admi
 execute(s, { type: 'RotateQr', actor: { workerId: admin.id }, deviceId: 'dev-admin', payload: { workerId: worker.id } });
 execute(s, { type: 'RevokeQr', actor: { workerId: admin.id }, deviceId: 'dev-admin', payload: { workerId: worker.id, reason: 'lost card' } });
 
-// A rejected command, to verify CommandOutcome audit (AC-ARCH-C9).
-execute(s, { type: 'SuspendWorker', actor: { workerId: admin.id }, deviceId: 'dev-admin', payload: { workerId: worker.id, reason: 'second suspension while active check' } });
+// A rejected command — suspension without the mandatory reason (§6.3.6) —
+// to verify CommandOutcome audit for rejections (AC-ARCH-C9).
+execute(s, { type: 'SuspendWorker', actor: { workerId: admin.id }, deviceId: 'dev-admin', payload: { workerId: worker.id } });
 
 // §7.8 minimum common audit fields on every F record:
 // event identity, command identity, actor, device identity, device timestamp,

@@ -44,14 +44,21 @@ const grant = s.facts.find((f) => f.type === 'CapabilityGrant' && f.payload.capa
 if (!grant) failures.push('no company_admin CapabilityGrant F record');
 else if (grant.subject !== worker?.id) failures.push('CapabilityGrant not attributed to the founder Worker');
 
-// Atomicity: a failing CreateCompany (duplicate name) must commit nothing.
+// Atomicity: a failing CreateCompany (missing name) commits no domain state.
+// CommandOutcome/CommandReceipt records are audit substrate retained
+// independently of domain fact production (AC-ARCH-C9); G4's no-partial-
+// mutation property applies to domain state, so the comparison excludes them.
 const s2 = createStore();
 execute(s2, { type: 'CreateCompany', actor: { personRef: { email: 'a@b.c', name: 'A' } }, payload: { companyName: 'DupCo' } });
-const before = s2.facts.length + s2.entities.size;
-const r2 = execute(s2, { type: 'CreateCompany', actor: { personRef: { email: 'x@y.z', name: 'X' } }, payload: { companyName: 'DupCo' } });
-const after = s2.facts.length + s2.entities.size;
-if (r2.outcome !== 'server rejected') failures.push(`duplicate CreateCompany outcome: ${r2.outcome} (expected server rejected)`);
-if (after !== before) failures.push('rejected CreateCompany mutated state (atomicity violated, AC-ARCH-G4)');
+const domainState = (st) => st.facts.filter((f) => f.type !== 'CommandOutcome' && f.type !== 'CommandReceipt').length + st.entities.size;
+const before = domainState(s2);
+const r2 = execute(s2, { type: 'CreateCompany', actor: { personRef: { email: 'x@y.z', name: 'X' } }, payload: { companyName: '' } });
+const after = domainState(s2);
+if (r2.outcome !== 'server rejected') failures.push(`invalid CreateCompany outcome: ${r2.outcome} (expected server rejected)`);
+if (after !== before) failures.push('rejected CreateCompany mutated domain state (atomicity violated, AC-ARCH-G4)');
+if (!s2.facts.some((f) => f.type === 'CommandOutcome' && f.payload.outcome === 'server rejected')) {
+  failures.push('rejected CreateCompany produced no CommandOutcome audit record (AC-ARCH-C9)');
+}
 
 // CommandReceipt present (idempotency substrate).
 if (!s.facts.some((f) => f.type === 'CommandReceipt')) failures.push('no CommandReceipt recorded');
