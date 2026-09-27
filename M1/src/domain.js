@@ -52,7 +52,7 @@ const SATISFACTION_DEFAULT = {
 // AcknowledgeRequirement, which §6.10.2 classifies offline-mutating; its
 // offline path is deferred with the halted AC-11 scope (AMB-002). No M1
 // mutation beyond the blueprint's classification is declared offline-capable.
-const OFFLINE_CAPABLE_PER_BLUEPRINT = new Set(['AcknowledgeRequirement']);
+export const OFFLINE_CAPABLE_COMMANDS = new Set(['AcknowledgeRequirement']);
 
 // ---------------------------------------------------------------------------
 // Store
@@ -65,6 +65,7 @@ export function createStore() {
     entities: new Map(), // id -> E genesis record (creation fact + fixed attrs)
     facts: [], // append-only F records (domain facts + CommandReceipt + CommandOutcome)
     commandOutcomes: new Map(), // commandId -> { outcome, reason } idempotency record
+    queue: [], // durable local queue (OS-INV-3/F4): offline-capable commands only
   };
 }
 
@@ -164,15 +165,24 @@ export function currentCapabilities(store, workerId) {
   return caps;
 }
 
-export function satisfactionState(store, workerId, requirementId) {
+export function satisfactionState(store, workerId, requirementId, excludeCommandId = null) {
   const req = store.entities.get(requirementId);
   if (!req || req.type !== 'Requirement') return null;
   const factType = SATISFACTION_FACT[req.reqType];
   const facts = store.facts.filter(
-    (f) => f.type === factType && f.subject === workerId && f.payload.requirementId === requirementId,
+    (f) => f.type === factType && f.subject === workerId && f.payload.requirementId === requirementId
+      && f.commandId !== excludeCommandId,
   );
   const state = facts.length ? facts[facts.length - 1].state : SATISFACTION_DEFAULT[req.reqType];
   return { state, facts };
+}
+
+// The applicable revision of a requirement group is its latest (§4.2/§4.6:
+// a new revision supersedes prior satisfaction).
+function isLatestRevision(store, req) {
+  return [...store.entities.values()]
+    .filter((r) => r.type === 'Requirement' && r.groupId === req.groupId)
+    .every((r) => r.revision <= req.revision);
 }
 
 export function activeQrIdentity(store, workerId) {
@@ -890,7 +900,9 @@ const HANDLERS = {
   AcknowledgeRequirement(store, ctx, payload) {
     const chk = satisfactionPrelude(store, ctx, payload, 'acknowledgement');
     if (chk.err) return chk.err;
-    const st = satisfactionState(store, payload.workerId, payload.requirementId).state;
+    // Server application of a queued offline command must not trip over its
+    // own durable local fact (C8 two-sided slices reconciled by identity).
+    const st = satisfactionState(store, payload.workerId, payload.requirementId, ctx.commandId).state;
     if (st !== 'presented') return `cannot acknowledge from state: ${st}`;
     appendFact(store, ctx, {
       type: 'Acknowledgement',
@@ -1023,13 +1035,15 @@ function assignmentEnded(store, assignmentId) {
 }
 
 // Shared validation for RequirementSatisfaction commands: requirement exists,
-// is of the expected type, belongs to the actor's Company, the target worker
-// belongs to the actor's Company, and the requirement applies to the worker.
+// is of the expected type, belongs to the actor's Company, is the current
+// (applicable) revision, the target worker belongs to the actor's Company,
+// and the requirement applies to the worker.
 function satisfactionPrelude(store, ctx, payload, reqType) {
   const rErr = tenantEntity(store, ctx, payload.requirementId, 'Requirement');
   if (rErr) return { err: rErr };
   const req = store.entities.get(payload.requirementId);
   if (req.reqType !== reqType) return { err: `requirement is not of type ${reqType}` };
+  if (!isLatestRevision(store, req)) return { err: 'requirement revision superseded (§4.6)' };
   const wErr = tenantEntity(store, ctx, payload.workerId, 'Worker');
   if (wErr) return { err: wErr };
   if (workerLifecycleState(store, payload.workerId) === 'offboarded') return { err: 'worker is offboarded' };
@@ -1084,4 +1098,262 @@ export function tick(store, now) {
       }
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Readiness derivation (§4.4 as amended by EP-4.0; §4.5; INV-1..6;
+// AC-ARCH-E1/E3) — D records: recomputed from E + F, never stored.
+// ---------------------------------------------------------------------------
+
+// §4.4 (EP-4.0): display_name non-empty AND (contact_phone OR contact_email).
+export function profileComplete(store, workerId) {
+  const p = deriveProfile(store, workerId);
+  if (!p) return false;
+  const nonEmpty = (v) => typeof v === 'string' && v.length > 0;
+  return nonEmpty(p.displayName) && (nonEmpty(p.contactPhone) || nonEmpty(p.contactEmail));
+}
+
+// Latest revision of each requirement group in a scope set is the applicable
+// requirement; superseded revisions no longer gate.
+function applicableRequirements(store, companyId, scopePred) {
+  const groups = new Map();
+  for (const e of store.entities.values()) {
+    if (e.type !== 'Requirement' || e.companyId !== companyId || !scopePred(e)) continue;
+    const cur = groups.get(e.groupId);
+    if (!cur || e.revision > cur.revision) groups.set(e.groupId, e);
+  }
+  return [...groups.values()];
+}
+
+const SATISFIED_STATES = {
+  document: new Set(['verified', 'expiring_soon']), // §4.6: expiring_soon warns; expiry removes readiness
+  induction: new Set(['completed']),
+  acknowledgement: new Set(['acknowledged']),
+};
+
+function satisfiedBy(store, workerId, req) {
+  const st = satisfactionState(store, workerId, req.id).state;
+  return SATISFIED_STATES[req.reqType].has(st);
+}
+
+// §4.4: company_ready := profile_complete AND all applicable company-scope
+// requirements satisfied. §4.5: every block returns the specific failing
+// requirement(s) — never a generic error.
+export function companyReady(store, workerId) {
+  const w = store.entities.get(workerId);
+  if (!w || w.type !== 'Worker') return { ready: false, failing: [], profileComplete: false };
+  const pc = profileComplete(store, workerId);
+  const failing = applicableRequirements(store, w.companyId, (r) => r.scope === 'company')
+    .filter((r) => requirementAppliesTo(store, r, workerId))
+    .filter((r) => !satisfiedBy(store, workerId, r))
+    .map((r) => r.id);
+  return { ready: pc && failing.length === 0, failing, profileComplete: pc };
+}
+
+// §4.4: site_ready := company_ready AND applicable project(site)/site
+// requirements AND SiteAssignment in assigned|active (§6.3.3). PS-INV-4:
+// readiness is per-site.
+export function siteReady(store, workerId, siteId) {
+  const site = store.entities.get(siteId);
+  if (!site || site.type !== 'Site') return { ready: false, failing: [], hasAssignment: false };
+  const cr = companyReady(store, workerId);
+  const project = store.entities.get(site.projectId);
+  const scoped = applicableRequirements(store, site.companyId,
+    (r) => (r.scope === 'site' && r.siteId === siteId)
+        || (r.scope === 'project' && r.projectId === project?.id));
+  const failing = scoped
+    .filter((r) => requirementAppliesTo(store, r, workerId))
+    .filter((r) => !satisfiedBy(store, workerId, r))
+    .map((r) => r.id);
+  const hasAssignment = [...store.entities.values()].some((e) =>
+    e.type === 'SiteAssignment' && e.workerId === workerId && e.siteId === siteId
+    && ASSIGNMENT_STATES.has(e.state) && !assignmentEnded(store, e.id));
+  return {
+    ready: cr.ready && failing.length === 0 && hasAssignment,
+    failing: [...new Set([...cr.failing, ...failing])],
+    hasAssignment,
+    companyReady: cr.ready,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Offline cached reads with freshness (§6.10.2; M0 offline-reconciliation §3;
+// AC-ARCH-E2: locally-committed / server-confirmed / stale / unknown).
+// A cache is a snapshot projection (D): recomputable, never authoritative.
+// ---------------------------------------------------------------------------
+
+function receiptConfirmed(store, commandId) {
+  return store.facts.some((f) => f.type === 'CommandReceipt' && f.commandId === commandId);
+}
+
+// Freshness of a snapshot section: local-unconfirmed facts beneath it make it
+// locally-committed; server facts newer than the snapshot make it stale;
+// otherwise server-confirmed.
+function sectionFreshness(store, cache, { local, newer }) {
+  if (local) return 'locally-committed';
+  if (newer) return 'stale';
+  return 'server-confirmed';
+}
+
+export function createCache(store, workerId) {
+  const w = store.entities.get(workerId);
+  const cache = {
+    workerId,
+    factsLen: store.facts.length,
+    entSeq: store.seq,
+    exists: !!w,
+    companyId: w?.companyId ?? null,
+  };
+  if (w) {
+    cache.profile = deriveProfile(store, workerId);
+    const cr = companyReady(store, workerId);
+    const siteEntries = [...store.entities.values()]
+      .filter((e) => e.type === 'SiteAssignment' && e.workerId === workerId && !assignmentEnded(store, e.id))
+      .map((a) => [a.siteId, siteReady(store, workerId, a.siteId)]);
+    cache.readiness = {
+      companyReady: cr.ready,
+      siteReady: Object.fromEntries(siteEntries.map(([id, sr]) => [id, sr.ready])),
+      detail: { companyReady: cr, siteReady: Object.fromEntries(siteEntries) },
+    };
+    cache.assignments = [...store.entities.values()]
+      .filter((e) => (e.type === 'SiteAssignment' || e.type === 'ProjectAssignment') && e.workerId === workerId)
+      .map((a) => ({ id: a.id, type: a.type, state: a.state, siteId: a.siteId, projectId: a.projectId, ended: assignmentEnded(store, a.id) }));
+  }
+  return cache;
+}
+
+export function cacheRead(store, cache) {
+  if (!cache || !cache.exists) {
+    return {
+      profile: { value: null, freshness: 'unknown' },
+      readiness: { value: null, freshness: 'unknown' },
+      assignments: { value: null, freshness: 'unknown' },
+    };
+  }
+  const newFacts = store.facts.slice(cache.factsLen);
+  // Only facts beneath the snapshot affect its freshness basis; facts newer
+  // than the snapshot (local or server) make it stale, never silently current.
+  const localUnconfirmed = (pred) => store.facts.slice(0, cache.factsLen)
+    .some((f) => f.layer === 'local' && !receiptConfirmed(store, f.commandId) && pred(f));
+
+  const profile = {
+    value: cache.profile,
+    freshness: sectionFreshness(store, cache, {
+      local: localUnconfirmed((f) => f.subject === cache.workerId && f.type === 'WorkerProfileChange'),
+      newer: newFacts.some((f) => f.type === 'WorkerProfileChange' && f.subject === cache.workerId),
+    }),
+  };
+
+  const readiness = {
+    value: cache.readiness,
+    freshness: sectionFreshness(store, cache, {
+      local: localUnconfirmed((f) => f.subject === cache.workerId && ['DocumentRevision', 'InductionCompletion', 'Acknowledgement'].includes(f.type)),
+      newer: newFacts.some((f) => f.subject === cache.workerId && ['DocumentRevision', 'InductionCompletion', 'Acknowledgement', 'WorkerLifecycleEvent'].includes(f.type))
+        || [...store.entities.values()].some((e) => e.type === 'Requirement' && e.companyId === cache.companyId && e.creationSeq > cache.entSeq),
+    }),
+  };
+
+  const assignments = {
+    value: cache.assignments,
+    freshness: sectionFreshness(store, cache, {
+      local: false, // M1 assignments are connectivity-required; never locally committed
+      newer: newFacts.some((f) => f.type === 'LifecycleEvent' && cache.assignments.some((a) => a.id === f.subject))
+        || [...store.entities.values()].some((e) => (e.type === 'SiteAssignment' || e.type === 'ProjectAssignment') && e.workerId === cache.workerId && e.creationSeq > cache.entSeq),
+    }),
+  };
+
+  return { profile, readiness, assignments };
+}
+
+// ---------------------------------------------------------------------------
+// Offline command path (§6.10.3; OS-INV-2/3/4; AC-ARCH-C1/C2/F1/F3/F4).
+// Durable intent: validate locally → durable local record (fact + queue
+// entry) in one atomic step → 'locally committed'. Transmission is separate
+// and per-command (transmitQueue).
+// ---------------------------------------------------------------------------
+
+export function executeOffline(store, cmd) {
+  const commandId = cmd.commandId ?? nid(store, 'cmd');
+  if (!OFFLINE_CAPABLE_COMMANDS.has(cmd.type)) {
+    // AC-ARCH-F1 + M0 vocabulary: terminal local rejection, never queued.
+    return {
+      commandId,
+      outcome: 'locally rejected',
+      reason: `${cmd.type} is connectivity-required (§6.10.2/§6.11.3); not offline-capable`,
+    };
+  }
+  // Idempotent re-submission of a durable local intent (OS-INV-4/C2).
+  const existing = store.queue.find((q) => q.commandId === commandId);
+  if (existing) return { commandId, outcome: 'locally committed', duplicate: true };
+  if (store.commandOutcomes.has(commandId)) {
+    return { commandId, ...store.commandOutcomes.get(commandId), duplicate: true };
+  }
+
+  const ctx = {
+    type: cmd.type,
+    commandId,
+    deviceId: cmd.deviceId ?? DEFAULT_DEVICE,
+    deviceTimestamp: cmd.deviceTimestamp ?? store.clock,
+    serverTimestamp: null, // no server contact offline; receipt carries sync time
+    actor: null,
+    companyId: undefined,
+  };
+
+  // Local preconditions (M0 §F.2): actor resolves, is the subject, is not
+  // suspended/offboarded, and the local slice satisfies the command's
+  // preconditions (acknowledgement: presented state per local facts).
+  const actorWorker = store.entities.get(cmd.actor?.workerId);
+  if (!actorWorker || actorWorker.type !== 'Worker') {
+    return { commandId, outcome: 'locally rejected', reason: 'actor worker not in local slice' };
+  }
+  ctx.actor = { kind: 'worker', id: actorWorker.id };
+  ctx.companyId = actorWorker.companyId;
+  const lc = workerLifecycleState(store, actorWorker.id);
+  if (lc === 'suspended' || lc === 'offboarded') {
+    return { commandId, outcome: 'locally rejected', reason: `actor worker is ${lc}` };
+  }
+  if (cmd.payload?.workerId !== actorWorker.id) {
+    return { commandId, outcome: 'locally rejected', reason: 'acknowledgement must be performed by the subject worker' };
+  }
+  const chk = satisfactionPrelude(store, ctx, cmd.payload ?? {}, 'acknowledgement');
+  if (chk.err) return { commandId, outcome: 'locally rejected', reason: chk.err };
+  const st = satisfactionState(store, cmd.payload.workerId, cmd.payload.requirementId).state;
+  if (st !== 'presented') {
+    return { commandId, outcome: 'locally rejected', reason: `cannot acknowledge from state: ${st}` };
+  }
+
+  // Durable local commit: local-layer fact + queue entry, atomically (C1,
+  // OS-INV-3). The local slice is locally authoritative until reconciled
+  // (DM-INV-10); the server slice applies at transmission.
+  appendFact(store, ctx, {
+    type: 'Acknowledgement',
+    subject: cmd.payload.workerId,
+    state: 'acknowledged',
+    layer: 'local',
+    companyId: ctx.companyId,
+    payload: { requirementId: chk.req.id, signature: cmd.payload.signature ?? null },
+  });
+  store.queue.push({
+    commandId,
+    cmd: deepFreeze({ type: cmd.type, actor: cmd.actor, deviceId: ctx.deviceId, deviceTimestamp: ctx.deviceTimestamp, payload: cmd.payload }),
+    state: 'queued',
+  });
+  return { commandId, outcome: 'locally committed' };
+}
+
+// Transmission: per-command independent outcomes; exactly-once via receipt;
+// succeeded commands retired; rejections preserved as CommandOutcome (C9) and
+// surfaced with reason (§6.10.3). Server revalidates against the current
+// server slice — a requirement superseded while offline rejects the queued
+// acknowledgement (readiness-gate violation discovered at sync).
+export function transmitQueue(store) {
+  const results = [];
+  for (const entry of store.queue) {
+    if (entry.state !== 'queued') continue;
+    const res = execute(store, { ...entry.cmd, commandId: entry.commandId });
+    entry.state = res.outcome === 'server accepted' ? 'confirmed' : 'surfaced';
+    results.push({ commandId: entry.commandId, outcome: res.outcome, reason: res.reason });
+  }
+  store.queue = store.queue.filter((q) => q.state === 'queued' || q.state === 'surfaced' ? q.state === 'surfaced' : false);
+  return { results };
 }
