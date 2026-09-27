@@ -9,14 +9,17 @@ tracking).
 - Repository: maddy0508/SITE-SYNC
 - Branch: main
 - Baseline commit: f90b77ab73cb7ae20b1084ad94fb5bc159afa841 (unchanged)
-- EP-1.0 freeze: tag EP-1.0 → db8a7d35002c461853c88ad78ea0523319a6251e
-  (annotated tag object 07fce9ed…; untouched by M0)
+- Operative EP: EP-2.0
+- EP-2.0 tag resolution: 276c7994b5c0cbfd88ed4d5cb4587a7bd46a0adb
+- EP-1.0 tag resolution: db8a7d35002c461853c88ad78ea0523319a6251e
+  (historical, unchanged)
 - Test commits: eede51d75cc504e9a6fe909473b5464afdb46605 (tests),
-  dc6de2df07ae04dd482ca5a1d3e2d1d8b01bf51c (ac-03 test defect fix)
+  dc6de2df07ae04dd482ca5a1d3e2d1d8b01bf51c (ac-03 test defect fix),
+  fc536ef487e10f39f2dec820eb5111cbca8c303b (m0-ac-01 transformed for EP-2.0)
 - Implementation (artifact) commit: a9f3c8543f9a0c289b60a7c627fe8a9b79378322
 - Evidence commit: c468dd8761b1fdcfd88685d6f5b74b52b0fed4d4
-- Finalisation commit (this update): HEAD of main at M0 close; SHA reported in
-  the M0 final report and reproducible via `git rev-parse HEAD`.
+- AMB-001 re-verification evidence commit: HEAD of main at M0 close; SHA
+  reported in the M0 final report and reproducible via `git rev-parse HEAD`.
 - Working tree: clean at every commit boundary (verified with
   `git status --porcelain` → empty).
 
@@ -50,13 +53,15 @@ catalogue amendments per §M0.1). Blueprint unmodified by M0 — verified:
 
 ## Milestone / gate state
 
-- Current milestone: M0 — gate: BLOCKED on M0-AC-1 (AMB-001 / BLK-001:
-  AC-ARCH-0.1–0.8 declared at §8.K but undefined). All other ACs PASS.
-- Unresolved ambiguities: AMB-001.
+- Current milestone: M0 — gate: PASS. M0-AC-1 through M0-AC-10 PASS under the
+  operative package EP-2.0 (§8.K amended; AMB-001 RESOLVED).
+- Unresolved ambiguities: none. AMB-001 RESOLVED 2026-09-27 (see
+  open-items.md).
 - Unresolved adversarial findings: none EXPOSED; DEFERRED probes named with
   target milestones in adversarial.md.
 - Pending extractions: §6.4, §6.8, §6.9, §6.11 (§M0.5 — non-blocking for M0;
   blocking for promotion).
 - Salvage register: full register at M0/salvage-register.md; zero promotions.
-- Next milestone: M1 NOT authorised (requires M0 PASS per §M0.6 / contract
-  Transition).
+- Next milestone: M1 execution contract may be drafted (M0 gate PASS per
+  §M0.6); M1 implementation begins only after the M1 execution contract is
+  approved (contract Transition).

@@ -41,6 +41,18 @@ discipline); M0 execution contract (evidence requirements).
   dispositioned SATISFIED in M0/architecture.md §8 Compliance Matrix;
   AC-ARCH-0.1–0.8 are marked UNVERIFIABLE — AMB-001.
 
+**AMB-001: RESOLVED**
+
+- Resolution date: 2026-09-27
+- Resolved by: Maddy McKellar
+- Resolution: §8.K was a drafting artifact. The AC-ARCH-0.1 through
+  AC-ARCH-0.8 reference was consolidated into M0-AC-1 through M0-AC-10
+  during blueprint finalisation. No separate criterion set exists.
+- Mechanism: Blueprint amendment (§8.K rewritten at commit 0eefbd6),
+  EP-2.0 cut and tagged.
+- Superseded package: EP-1.0 (historical, unchanged).
+- Operative package: EP-2.0.
+
 ## Deferred items (with target)
 
 | Item | Reason | Target |
@@ -53,7 +65,7 @@ discipline); M0 execution contract (evidence requirements).
 
 ## Unresolved findings
 
-- AMB-001 (above) — awaiting human decision.
+- None. AMB-001 is RESOLVED (above).
 - EVIDENCE/AC-04_BASELINE/ absent at EP-1.0 while declared PARTIAL in the M0
   contract input table — consistent with §M0.5; no action at M0.
 

@@ -69,11 +69,12 @@ blueprint; recorded as an ambiguity, not resolved here (Skill 01, SILENT class).
 | AC-ARCH-I2 | SATISFIED | Requirement types fixed in v1, §C below |
 | AC-ARCH-I3 | SATISFIED | Event vocabulary fixed, §D below |
 | AC-ARCH-I4 | SATISFIED | No field-operational entity/fact in two Sites, §A below |
-| AC-ARCH-0.1 through AC-ARCH-0.8 | UNVERIFIABLE — AMB-001 | §8.K declares these "verified at M0" but the blueprint never enumerates them. Recorded as AMBIGUITY_RECORD AMB-001 in M0/evidence/open-items.md. Not satisfied, not waived; per Operating Contract §6 the affected scope (full §8 verification completeness claim within M0-AC-1) is halted pending human decision. |
+| AC-ARCH-0.1 through AC-ARCH-0.8 | CLOSED — AMB-001 RESOLVED | §8.K as amended (commit 0eefbd6, operative package EP-2.0) states these identifiers were a drafting artifact, consolidated into M0-AC-1 through M0-AC-10 during blueprint finalisation; no separate criterion set exists. Nothing to disposition beyond the M0-AC set. |
 
 No constraint is DEFERRED. All 43 defined constraints are SATISFIED by named
-mechanisms below. The eight §8.K criteria are UNVERIFIABLE (AMB-001); per
-§M0.6 "no partial pass", M0-AC-1 cannot be reported PASS until AMB-001 resolves.
+mechanisms below. AMB-001 is RESOLVED (2026-09-27): §8.K as amended under
+EP-2.0 identifies M0-AC-1 through M0-AC-10 as the operative criteria, so the
+§8-verification completeness claim within M0-AC-1 is fully evidenced.
 
 ---
 
@@ -481,10 +482,11 @@ The following are prohibited by §M0.2 and are closed by this architecture:
 
 ## Ambiguities and open items
 
-- AMB-001 — §8.K declares AC-ARCH-0.1 through AC-ARCH-0.8 "verified at M0" but
-  no enumeration of these criteria exists in the blueprint, operating contract,
-  skills, or M0 execution contract. Recorded in M0/evidence/open-items.md.
-  Affected scope: the §8-verification completeness claim inside M0-AC-1.
+- AMB-001 — RESOLVED 2026-09-27 (Maddy McKellar): §8.K was a drafting
+  artifact; AC-ARCH-0.1 through AC-ARCH-0.8 were consolidated into M0-AC-1
+  through M0-AC-10 during blueprint finalisation; no separate criterion set
+  exists. §8.K amended at commit 0eefbd6; operative package EP-2.0. Full
+  record in M0/evidence/open-items.md.
 - §8.M open selections (local storage engine; sync algorithm; per-class
   conflict mechanisms; physical DeviceInstallation representation; server
   storage and tenancy mechanism; audit materialisation strategy) remain OPEN

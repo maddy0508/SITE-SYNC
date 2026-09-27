@@ -46,8 +46,11 @@ No EXPOSED finding may remain open without a BLOCKER_RECORD.
 | 34 | Hard delete reachable from user path | §8 H1 | No user path; retention role separate | persistence-model.md §1.2 | MITIGATED (contract) |
 | 35 | RetentionDestructionEvent destroyed by its own retention | §8 H5/§6.11.4 | Event not part of any Company's retention set; survives | architecture.md §O item 2 | MITIGATED (contract) |
 | 36 | §8 compliance matrix quietly drops a constraint | §8.K | Structural test enumerates all 43 identifiers; missing → FAIL | m0-ac-01.test.mjs | MITIGATED (structural test) |
-| 37 | Undefined §8.K criteria silently treated as satisfied | §8.K | Test fails unless matrix marks them UNVERIFIABLE with AMB-001 | m0-ac-01.test.mjs; open-items.md AMB-001 | MITIGATED (process); the criteria themselves remain UNDEFINED → AMB-001 open |
+| 37 | Undefined §8.K criteria silently treated as satisfied | §8.K | EP-1.0: test failed unless matrix marked them UNVERIFIABLE with AMB-001. EP-2.0 (AMB-001 RESOLVED): transformed test asserts amended §8.K identifies M0-AC-1..10 as operative and that no AC-ARCH-0.x reference remains outside the amendment record | m0-ac-01.test.mjs (fc536ef); open-items.md AMB-001 | MITIGATED — AMB-001 RESOLVED 2026-09-27; probe re-targeted and passing under EP-2.0 |
 | 38 | Salvage promoted because "it works" or by name resemblance | §M0.4; Skill 03 | Register rows limited to REFERENCE/FREEZE/SALVAGE/DISCARD/OPEN/PENDING/NEW; promotion ledger empty; git check blocks code changes | salvage-register.md; m0-ac-10.test.mjs | MITIGATED (structural test) |
 
-Unresolved: none EXPOSED. AMB-001 (probe 37) is an ambiguity, tracked in
-open-items.md, blocking the M0-AC-1 completeness claim — recorded as BLK-001.
+Unresolved: none EXPOSED. AMB-001 (probe 37) is RESOLVED (2026-09-27,
+blueprint amendment at commit 0eefbd6, operative package EP-2.0); the probe
+was re-targeted to the amended §8.K and passes. No new probes were required by
+the M0-AC-1 re-verification: probes 1–38 remain as recorded, with probe 37's
+disposition updated above.

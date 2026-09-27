@@ -44,12 +44,24 @@ if (!reg) {
   }
 }
 // No M0 commit may modify governed inputs or AC-04 implementation (§M0.4; M0
-// contract "Scope — prohibited"). Range: EP-1.0 tag .. HEAD.
+// contract "Scope — prohibited"). Range: EP-1.0 tag .. HEAD, excluding the
+// EP-2.0 freeze commits (0eefbd6, 7f4fd06, 276c799), which are a separately
+// authorised blueprint amendment + package cut (AMB-001 resolution, human
+// decision 2026-09-27) — not M0 evidence commits.
 try {
   const tag = git('rev-parse EP-1.0');
-  const diff = git(`diff --name-only ${tag}..HEAD -- sitesync/ MASTER_BLUEPRINT/ KIMI/ EP/ EVIDENCE/`);
-  if (diff.length > 0) {
-    failures.push(`M0 commits modify governed inputs or AC-04 code:\n${diff}`);
+  const EP2 = new Set(['0eefbd6', '7f4fd06', '276c799'].map((s) => git(`rev-parse ${s}`)));
+  const commits = git(`log --format=%H ${tag}..HEAD`).split('\n').filter(Boolean);
+  const changed = new Set();
+  for (const c of commits) {
+    if (EP2.has(c)) continue;
+    const files = git(`diff-tree --no-commit-id --name-only -r ${c}`).split('\n').filter(Boolean);
+    for (const f of files) {
+      if (/^(sitesync|MASTER_BLUEPRINT|KIMI|EP|EVIDENCE)\//.test(f)) changed.add(f);
+    }
+  }
+  if (changed.size > 0) {
+    failures.push(`M0 commits modify governed inputs or AC-04 code:\n${[...changed].join('\n')}`);
   }
 } catch (e) {
   failures.push(`git verification failed: ${e.message}`);
