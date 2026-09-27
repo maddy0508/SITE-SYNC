@@ -46,7 +46,8 @@ if (!doc) {
     failures.push('state-mutating section does not name durable intent');
   }
   // Every read-only capability must name cache + freshness (§8 E2).
-  const readSection = doc.split(/read-only/i)[1] ?? '';
+  // Everything after the first "read-only" occurrence is the read-class side.
+  const readSection = doc.split(/read-only/i).slice(1).join(' ');
   if (!/cach/i.test(readSection) || !/freshness/i.test(readSection)) {
     failures.push('read-only section does not name cache/read model and freshness');
   }
