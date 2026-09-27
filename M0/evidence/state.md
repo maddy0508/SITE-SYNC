@@ -14,9 +14,9 @@ tracking).
 - Test commits: eede51d75cc504e9a6fe909473b5464afdb46605 (tests),
   dc6de2df07ae04dd482ca5a1d3e2d1d8b01bf51c (ac-03 test defect fix)
 - Implementation (artifact) commit: a9f3c8543f9a0c289b60a7c627fe8a9b79378322
-- Evidence commit: recorded below in the finalisation block (this file is
-  updated once, in a separate finalisation commit, with the evidence commit
-  SHA; the M0 final report carries the resulting HEAD SHA).
+- Evidence commit: c468dd8761b1fdcfd88685d6f5b74b52b0fed4d4
+- Finalisation commit (this update): HEAD of main at M0 close; SHA reported in
+  the M0 final report and reproducible via `git rev-parse HEAD`.
 - Working tree: clean at every commit boundary (verified with
   `git status --porcelain` → empty).
 
