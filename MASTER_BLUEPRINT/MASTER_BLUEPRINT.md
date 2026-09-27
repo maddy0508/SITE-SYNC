@@ -26,7 +26,7 @@ Section Locked version
 §6.10 Offline / Sync v0.2
 §6.11 Administration v0.10.1
 §7 Conceptual Data Model v0.7.2 + §6.3/§6.4/§6.9 catalogue amendments
-§8 Architectural Constraints v0.8.1
+§8 Architectural Constraints v0.8.2
 §11 Milestone map provisional / arch-gated
 §12 Salvage register partial
 M0 Product / Architecture Contract v1.0.1
@@ -1516,7 +1516,14 @@ Each must satisfy §8.2–§8.I. None is dictated.
 
 8.K — Architecture acceptance criteria
 
-AC-ARCH-0.1 through AC-ARCH-0.8, verified at M0.
+The implementation architecture is verified at M0 against the M0
+acceptance criteria defined in the M0 Execution Contract (§M0.6):
+M0-AC-1 through M0-AC-10.
+
+The earlier reference to "AC-ARCH-0.1 through AC-ARCH-0.8" in this
+section was a drafting artifact. Those criteria were consolidated into
+the M0-AC-* list during blueprint finalisation, and no separate criterion
+set exists.
 
 8.L — AC-04 implications
 
