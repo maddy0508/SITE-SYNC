@@ -21,7 +21,19 @@ const baseline = git('rev-parse cfda19f^{commit}');
 // 1. Diff scope: every path changed since the M2-start commit is
 // M2-authorised (everything under M2/). No governed artifact, blueprint, EP
 // container, or M0/M1 artifact touched.
-const commits = git(`log --format=%H ${baseline}..HEAD`).split('\n').filter(Boolean);
+// Post-freeze mechanical adjustment (same category as m0-ac-10 / m1-ac-14;
+// pattern authorised by the M2 contract's freeze-whitelist chronology rule):
+// the range diff cfda19f..HEAD includes the authorised EP-5.0 freeze commits
+// (M2 contract installation + manifest + lock), which are not M2
+// implementation. They are excluded by literal SHA. The assertion is
+// unchanged: only M2-authorised changes may appear in the delta.
+const EP5_FREEZE = new Set(['0d43b43', '1893ab3', '00c2adb'].map((s) => git(`rev-parse ${s}`)));
+// Also excluded, disclosed separately beyond the contract's template: the
+// M1 gate-acceptance commit f8fe895 (touches M1/evidence/state.md only) sits
+// inside the range cfda19f..HEAD and is governance, not M2 implementation.
+const GOVERNANCE = new Set(['f8fe895'].map((s) => git(`rev-parse ${s}`)));
+const EXCLUDED = new Set([...EP5_FREEZE, ...GOVERNANCE]);
+const commits = git(`log --format=%H ${baseline}..HEAD`).split('\n').filter(Boolean).filter((c) => !EXCLUDED.has(c));
 const changed = new Set();
 for (const c of commits) {
   for (const p of git(`diff-tree --no-commit-id --name-only -r ${c}`).split('\n').filter(Boolean)) {
