@@ -1,0 +1,12 @@
+EP Version:          EP-3.0
+Frozen:              2026-09-27
+Frozen by:           Maddy McKellar
+Manifest SHA-256:    97dafad60bfcbb905119be5fdb91fc82c34e4c08224ddd5e0d1f875bf0db26bd
+Baseline commit:     f90b77ab73cb7ae20b1084ad94fb5bc159afa841
+Supersedes:          EP-2.0
+Approval note:       EP-3.0 supersedes EP-2.0. Adds M1 Execution
+                     Contract v1.0. EP-1.0 and EP-2.0 remain
+                     historically valid and unchanged. Modifications
+                     permitted only via EP-4.0 with human approval.
+                     Container identity is the Git tag EP-3.0, not a
+                     field in this file.
