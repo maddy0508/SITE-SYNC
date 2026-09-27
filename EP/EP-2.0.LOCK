@@ -1,0 +1,12 @@
+EP Version:          EP-2.0
+Frozen:              2026-09-27
+Frozen by:           Maddy McKellar
+Manifest SHA-256:    f556a225319bfba3abbab993a5dc9420ddd3d9ca5210842a99791ba4d25ae7aa
+Baseline commit:     f90b77ab73cb7ae20b1084ad94fb5bc159afa841
+Supersedes:          EP-1.0
+Approval note:       EP-2.0 supersedes EP-1.0. Amendment: §8.K
+                     clarified (AMB-001 resolution; see
+                     M0/evidence/open-items.md). Modifications
+                     permitted only via EP-3.0 with human approval.
+                     Container identity is the Git tag EP-2.0,
+                     not a field in this file.
