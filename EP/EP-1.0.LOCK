@@ -1,7 +1,7 @@
 EP Version:          EP-1.0
 Frozen:              2026-09-27
 Frozen by:           Maddy McKellar
-Manifest SHA-256:    f82d46cd37344d25ae7766396b3e93a736e6d9fc5c59af2fb6d2a7cb66ad2059
+Manifest SHA-256:    bb2f8d664419fbc572cb457e8cc0c10c4f3c48ff585f57969907095b0073257f
 Baseline commit:     f90b77ab73cb7ae20b1084ad94fb5bc159afa841
 Approval note:       EP-1.0 frozen. Modifications permitted only via
                      EP-2.0 with human approval. Container identity is
