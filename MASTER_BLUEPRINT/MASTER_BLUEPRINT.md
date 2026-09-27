@@ -154,6 +154,11 @@ Signed, not verified. presented and acknowledged are distinct auditable facts.
 4.4 Readiness is derived, not chained
 
 ```text
+profile_complete(worker) :=
+    display_name(worker) is non-empty
+    AND (contact_phone(worker) is non-empty
+         OR contact_email(worker) is non-empty)
+
 company_ready(worker) :=
     profile_complete(worker)
     AND ∀ requirement R where R.scope = company AND applies(R, worker):
