@@ -1,7 +1,7 @@
 # M1 Adversarial Audit (Skill 07)
 
 Executable probes: `M1/evidence/adversarial-probes.mjs`
-Run at implementation commit `62241d3f0699b46a55d169fcb72392db2a2f2eb5`:
+Run at implementation commits `62241d3f0699b46a55d169fcb72392db2a2f2eb5` (phase 1, EP-3.0: P1–P11, P13, P15–P17, P19) and `1af43d6332919d7148878b6040b3e619b9ec4174` (phase 2, EP-4.0: P12, P18 added):
 
 ```
 $ node M1/evidence/adversarial-probes.mjs
@@ -22,6 +22,8 @@ PROBE P15 PASS every command (accepted and rejected) has exactly one audited Com
 PROBE P16 PASS every entity genesis traces to a receipted accepted command (no mutation without audit)
 PROBE P17 PASS idempotency index is exactly consistent with CommandOutcome facts (an index, not a shadow store)
 PROBE P19 PASS retired QR persists as record but never resolves active; exactly one active at all times
+PROBE P12 PASS offline commit durable across restart boundary, transmitted once, queue retired
+PROBE P18 PASS pre-change snapshot disclosed stale; fresh snapshot labels unconfirmed local fact locally-committed (never server-confirmed)
 ALL PROBES PASS (exit 0)
 ```
 
@@ -38,13 +40,13 @@ ALL PROBES PASS (exit 0)
 | P9 | Reach hard deletion via any exported path | §8 H1/H5 | No delete/remove/destroy/purge export exists | probe output | MITIGATED |
 | P10 | Stored status/flag becoming authoritative (profile, capabilities, lifecycle, readiness) | §8 A4, WC-INV-6/13 | No suspect stored field on any entity; Worker carries only immutable creation fact; Project/Site carry only immutable entry state | probe output; M1-AC-3; derivation functions L131–195 | MITIGATED |
 | P11 | F record embedding a derived value as input | §8 E3 | No fact payload contains a derived value | probe output | MITIGATED |
-| P12 | Offline durability: committed action lost after restart; queued action dropped silently; local rejection queued | §8 C1, G3, F1–F4 | Not executable: offline queue is halted AC-11 scope (AMB-002). No M1 mutation is declared offline-capable in this build, so there is no queue to attack. | open-items.md AMB-002 | DEFERRED — AMB-002 resolution, then M1-AC-11 |
+| P12 | Offline durability: committed action lost after restart; queued action dropped silently; local rejection queued | §8 C1, G3, F1–F4 | Deferred at EP-3.0 phase (AMB-002); executed under EP-4.0: local fact + queue entry durable across restart boundary, transmitted exactly once, queue retired; connectivity-required commands locally rejected with reason and never queued | probe output; M1-AC-11 | MITIGATED |
 | P13 | Same-worker same-field concurrent profile writes resolve by undeclared rule or silently | §8 C6, §6.10.3 | Declared rule executed: later timestamp wins, both recorded | probe output | MITIGATED |
 | P14 | Concurrent QR rotations race (two-active or zero window) | §6.3.3 | Single-authority core serialises commands; distributed arrival ordering is a sync-layer property not simulable in the M1 domain core | M0 command-sync-model §5 governs the sync layer | DEFERRED — first milestone implementing two-sided sync execution |
 | P15 | Rejected command disappears from audit | §8 D1, C9 | Every command yields exactly one CommandOutcome; rejection carries reason | probe output; M1-AC-13 | MITIGATED |
 | P16 | Domain mutation without an F record | §8 D1 | Every entity genesis commandId traces to a receipted accepted command | probe output | MITIGATED |
 | P17 | Shadow state: idempotency index diverging from fact stream | §8 A1, M0 "no parallel audit store" | commandOutcomes index proven exactly consistent with CommandOutcome facts | probe output | MITIGATED |
-| P18 | Offline reads: stale presented as current; locally-committed presented as server-confirmed | §8 E2, F1 | Not executable: cached read models are halted AC-11 scope (AMB-002) | open-items.md AMB-002 | DEFERRED — AMB-002 resolution, then M1-AC-11 |
+| P18 | Offline reads: stale presented as current; locally-committed presented as server-confirmed | §8 E2, F1 | Deferred at EP-3.0 phase (AMB-002); executed under EP-4.0: pre-change snapshot disclosed stale; unconfirmed local facts labelled locally-committed, never server-confirmed; uncached reads unknown | probe output; M1-AC-11 | MITIGATED |
 | P19 | Retired QR resolves as active; two active QRs; zero-active rotation window | WC-INV-7, §6.3.3 | Retired identities never resolve active; exactly one active at all times; rotation validates fully before mutating | probe output; M1-AC-10 | MITIGATED |
 | P20 | Retention destruction reachable from a user path; RetentionDestructionEvent self-destroyed | §8 H5 | Retention destruction is not implemented in M1 (Platform-scope, later milestone); no destruction path exists to attack (P9) | M1 contract out-of-scope list | DEFERRED — Platform retention milestone |
 | P21 | Progress/attendance adversarial set (double verification, reversal erasure, CRITICAL blocker bypass, check-out before check-in, offline gate bypass) | §6.5, §6.6, §6.7 | Entity classes not implemented in M1 (AC-14 enforces absence) | M1 contract out-of-scope list | DEFERRED — M5/M6/M7/M8 respectively |

@@ -191,5 +191,38 @@ function addWorker(s, admin, email) {
   probe('P19', retiredNotActive && activeCount === 1 && all.length === 2, 'retired QR persists as record but never resolves active; exactly one active at all times');
 }
 
+// --- P12/P18: offline durability and offline reads (§8 C1/G3/F1-F4, E2) ---
+// Deferred at EP-3.0 phase (AMB-002); executable under EP-4.0 with the
+// offline path implemented.
+{
+  const { s, adminA } = boot();
+  const w = addWorker(s, adminA, 'off@x.co');
+  execute(s, {
+    type: 'CreateRequirement', actor: { workerId: adminA.id },
+    payload: { scope: 'company', companyId: s.entities.get(w.id).companyId, reqType: 'acknowledgement', title: 'Policy', appliesTo: { kind: 'all_workers' }, requiresVerification: false, expiry: { kind: 'none' } },
+  });
+  const req = [...s.entities.values()].find((e) => e.type === 'Requirement' && e.title === 'Policy');
+  execute(s, { type: 'PresentAcknowledgement', actor: { workerId: w.id }, payload: { workerId: w.id, requirementId: req.id } });
+
+  // Durable intent: local fact + queue entry exist before any server contact.
+  const r = domain.executeOffline(s, { type: 'AcknowledgeRequirement', commandId: 'p12-cmd', actor: { workerId: w.id }, deviceId: 'dev-w', payload: { workerId: w.id, requirementId: req.id, signature: 'sig' } });
+  const localFact = s.facts.find((f) => f.commandId === 'p12-cmd' && f.layer === 'local');
+  const queued = s.queue.find((q) => q.commandId === 'p12-cmd');
+  // Simulated restart: nothing leaves the store; queue and local fact intact.
+  const stillThere = s.facts.includes(localFact) && s.queue.includes(queued) && queued.state === 'queued';
+  const tx = domain.transmitQueue(s);
+  probe('P12', r.outcome === 'locally committed' && localFact && stillThere && tx.results[0]?.outcome === 'server accepted' && !s.queue.some((q) => q.commandId === 'p12-cmd'), 'offline commit durable across restart boundary, transmitted once, queue retired');
+
+  // Freshness honesty: a snapshot taken before an unconfirmed local fact
+  // never labels it server-confirmed; stale snapshots disclose, not hide.
+  const w2 = addWorker(s, adminA, 'off2@x.co');
+  execute(s, { type: 'PresentAcknowledgement', actor: { workerId: w2.id }, payload: { workerId: w2.id, requirementId: req.id } });
+  const cache = domain.createCache(s, w2.id);
+  domain.executeOffline(s, { type: 'AcknowledgeRequirement', commandId: 'p18-cmd', actor: { workerId: w2.id }, payload: { workerId: w2.id, requirementId: req.id, signature: 'sig' } });
+  const readStale = domain.cacheRead(s, cache);
+  const readFresh = domain.cacheRead(s, domain.createCache(s, w2.id));
+  probe('P18', readStale.readiness.freshness === 'stale' && readFresh.readiness.freshness === 'locally-committed', 'pre-change snapshot disclosed stale; fresh snapshot labels unconfirmed local fact locally-committed (never server-confirmed)');
+}
+
 console.log(failures === 0 ? 'ALL PROBES PASS' : `${failures} PROBE(S) FAILED`);
 process.exit(failures === 0 ? 0 : 1);

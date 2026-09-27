@@ -2,13 +2,17 @@
 
 ## Repository state
 
-- Final code commit: `62241d3f0699b46a55d169fcb72392db2a2f2eb5`
-  (M1 domain core; parent chain: b79d312 → 1d2afc5 → 4739e9d (EP-3.0))
-- Evidence bundle: this directory, committed immediately after 62241d3
-  (see git log for the exact SHA; the bundle cannot contain its own commit SHA)
-- Operative EP: EP-3.0 (tag `4739e9dc4dbd2b1545c8b4a8d1ed00c22d9ad696`)
-- Tags EP-1.0 / EP-2.0 / EP-3.0: unmodified (verified post-commit:
-  `git rev-parse EP-1.0 EP-2.0 EP-3.0` unchanged)
+- Final code commit: `1af43d6332919d7148878b6040b3e619b9ec4174`
+  (phase 2; phase 1 code commit `62241d3f0699b46a55d169fcb72392db2a2f2eb5`)
+- Evidence bundle: this directory; phase 1 at `2a4d4ae`, phase 2 update
+  committed after 1af43d6 (see git log for the exact SHA; the bundle cannot
+  contain its own commit SHA)
+- Operative EP: EP-4.0 (tag `0ac087ee1687b5a2a0f3cda80c035e3913dfe4fe`).
+  Phase 1 ACs (1–8, 10, 12–14) verified under EP-3.0; phase 2 ACs (9, 11)
+  verified under EP-4.0. Recorded per AC in acceptance-map.md.
+- Tags EP-1.0 / EP-2.0 / EP-3.0 / EP-4.0: EP-1.0–3.0 unmodified
+  (`db8a7d3…` / `276c799…` / `4739e9d…` verified post-commit);
+  EP-4.0 created by the AMB-002 resolution freeze
 - Working tree: clean after evidence commit (`git status --short` → empty)
 
 ## CI status
@@ -34,16 +38,21 @@ is no migration chain in M1 scope. (Decision record below.)
 
 1. **Local storage engine** (§8.J): the M1 domain core runs against an
    in-memory store (`entities: Map`, `facts: append-only array`,
-   `commandOutcomes: Map` idempotency index). A durable local engine is
-   **not yet selected**: the only blueprint-classified offline-mutating M1
-   command (AcknowledgeRequirement, §6.10.2) is deferred with the halted
-   AC-11 scope (AMB-002), so no durable-intent obligation (OS-INV-3) is live
-   in this build. Decision on the durable engine is due with AC-11.
-2. **Sync algorithm** (§8.J): deferred with AC-11 (AMB-002). All M1 commands
-   execute on the connectivity-required path: synchronous application against
-   the single authority, exactly-once via CommandReceipt (M0 §G). No queue,
-   retry, or reconciliation machinery is implemented, and none is required by
-   the implemented command set.
+   `commandOutcomes: Map` idempotency index, `queue` durable-intent array).
+   Durable-intent semantics (OS-INV-3) are modelled structurally in the
+   domain core; the physical durable engine (e.g. SQLite/IndexedDB) is an
+   application-shell decision, not yet selected — the domain core does not
+   dictate it.
+2. **Sync algorithm** (§8.J): phase 1 deferred with AC-11; implemented in
+   phase 2 for the single blueprint-classified offline-mutating M1 command
+   (AcknowledgeRequirement): durable local commit (fact + queue entry) →
+   'locally committed' → per-command transmission → server applies once via
+   CommandReceipt, queue retired on acceptance, rejections surfaced and
+   preserved (§6.10.3). All other M1 commands execute on the
+   connectivity-required path: synchronous application, exactly-once via
+   CommandReceipt (M0 §G). No retry machinery beyond idempotent
+   re-transmission is implemented; bounded retries are an application-shell
+   concern outside the domain core.
 3. **Conflict resolution mechanisms per entity class** (§8.J, using §6.10.3):
    M1's implemented classes admit exactly one overlapping-write surface —
    Worker profile same-field changes — resolved by the §6.10.3 declared rule
@@ -75,7 +84,8 @@ M0-architecture defect.)
 ## Blueprint ambiguities raised
 
 - **AMB-002** — `profile_complete(worker)` used by §4.4, defined nowhere.
-  Halts M1-AC-9 and M1-AC-11. Full record: open-items.md.
+  RESOLVED 2026-09-27 by human decision (Option D2); blueprint §4.4 amended;
+  EP-4.0 cut and tagged. Full record: open-items.md.
 
 ## Salvage promoted
 

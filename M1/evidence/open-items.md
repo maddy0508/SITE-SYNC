@@ -1,8 +1,19 @@
 # M1 Open Items
 
-## AMB-002 — `profile_complete(worker)` is used by §4.4 but defined nowhere
+## AMB-002: RESOLVED
 
-**Status: OPEN — halts M1-AC-9 and M1-AC-11.**
+Resolution date: 2026-09-27
+Resolved by: Maddy McKellar
+Resolution: profile_complete(worker) defined in §4.4 as
+            display_name non-empty AND (contact_phone non-empty
+            OR contact_email non-empty).
+Mechanism: Blueprint §4.4 amendment; EP-4.0 cut and tagged.
+Superseded package: EP-3.0 (historical, unchanged).
+Operative package: EP-4.0.
+
+## AMB-002 — historical record (as raised): `profile_complete(worker)` was used by §4.4 but defined nowhere
+
+**Status: RESOLVED (above) — scope resumed under EP-4.0.**
 
 **Where.** MASTER_BLUEPRINT §4.4 (MASTER_BLUEPRINT/MASTER_BLUEPRINT.md
 lines 156–163, EP-2.0 bytes, unchanged at EP-3.0):
@@ -40,18 +51,18 @@ scope") the predicate cannot be implemented by choosing.
 **Same class as AMB-001** (§8.K referenced undefined AC-ARCH-0.x criteria):
 a locked section references an undefined term.
 
-**Affected scope (halted).**
+**Affected scope (halted at EP-3.0 phase; resumed and completed under EP-4.0).**
 
 - **M1-AC-9** — readiness derivation: `company_ready` per §4.4 embeds
-  `profile_complete`; computing it requires the undefined predicate. No test
-  authored; no derivation implemented.
+  `profile_complete`; computing it required the undefined predicate. No test
+  was authored at the EP-3.0 phase; after EP-4.0 supplied the definition,
+  `m1-ac-09.test.mjs` was authored test-first (commit `b93b6ff`) with a FAIL
+  baseline, implemented at `1af43d6`, PASS, ancestry verified.
 - **M1-AC-11** — its "applicable readiness" cached-read and freshness
-  clauses depend on the halted derivation, and the criterion is atomic (M1
-  contract: no partial pass). Consequently the offline durable-intent path
-  for AcknowledgeRequirement (§6.10.2's only M1-relevant offline-mutating
-  classification) is also deferred: declaring it offline-capable without its
-  acceptance test would violate INV-C. The implemented domain core therefore
-  executes all M1 commands on the online path only.
+  clauses depended on the halted derivation. Resumed under EP-4.0 with the
+  offline durable-intent path for AcknowledgeRequirement (§6.10.2's only
+  M1-relevant offline-mutating classification) implemented alongside:
+  `m1-ac-11.test.mjs` at `b93b6ff`, FAIL baseline, PASS at `1af43d6`.
 
 **Unaffected.** M1-AC-1..8, 10, 12, 13, 14 — none of them reference
 `profile_complete` or readiness.
@@ -67,18 +78,24 @@ a locked section references an undefined term.
    readiness gating (INV-1/INV-2) should not be tenant-variable without a
    blueprint decision saying so.
 
-## Noted interpretation (not an ambiguity) — offboarding ends assignments
+## Noted interpretation — assignment removal during offboarding
 
-The M1 contract's lifecycle boundary ("no ... assignment removal beyond
-`assigned` / `active` states") could be read to forbid ending assignments at
-all in M1. That reading contradicts the contract's own in-scope behaviour 3
-(Worker lifecycle including `offboarded`) combined with §6.3.3 ("Offboarded
-Worker: all assignments and memberships ended"). The consistent reading is:
-the boundary forbids standalone assignment-removal lifecycle operations;
-the offboarding cascade that §6.3.3 mandates is required. M1 implements
-assignment-ending only inside OffboardWorker (as attributed LifecycleEvent
-`removed` facts), and exports no standalone removal command. Recorded for
-human review; flagged here rather than silently assumed.
+The M1 contract's lifecycle boundary forbids "assignment removal
+beyond assigned/active states" as a standalone operation. The
+offboarding cascade in §6.3.3 mandates that all assignments and
+memberships be ended on offboarding. If the boundary were read to
+forbid offboarding assignment-ending, in-scope behaviour 3
+(offboarding) would be impossible whenever assignments exist.
+
+Reading: M1 implements assignment-ending only as part of the
+offboarding cascade. No standalone assignment-removal operation
+exists in M1.
+
+Reason this is not an AMB: the alternative reading is
+self-contradictory within the M1 contract, so only one valid
+reading exists.
+
+Flagged for future reviewers in case M2 changes the boundary.
 
 ## Offboarding preconditions against unimplemented artifact classes
 
@@ -92,10 +109,10 @@ implementation distinguishes "no applicable open artifacts exist" from
 
 ## Deferred adversarial probes
 
-See adversarial.md: offline durability (P12), offline reads/freshness (P18),
-distributed QR rotation race (P14), archive/retention destruction (P20),
-progress/attendance probes (P21) — each DEFERRED to a named milestone or to
-AMB-002 resolution.
+See adversarial.md: distributed QR rotation race (P14), archive/retention
+destruction (P20), progress/attendance probes (P21) — each DEFERRED to a
+named milestone. P12 (offline durability) and P18 (offline reads/freshness)
+were executed after AMB-002 resolution and are MITIGATED.
 
 ## Salvage
 
@@ -104,5 +121,9 @@ code paths are referenced by M1/src or M1/acceptance-tests.
 
 ## BLK records
 
-None raised. (AMB-002 blocks the gate but is an ambiguity record, not a
-blocker record; the milestone status reflects it.)
+None raised.
+
+## Current open items
+
+None. AMB-002 is resolved; all other records are dispositions or deferred
+probes with named target milestones.

@@ -172,3 +172,37 @@ function; append-only fact stream.
 - Command: `node M1/evidence/adversarial-probes.mjs`
 - Output: probes P7, P8, P9 PASS
 - Supports: M1-AC-13 (audit integrity), M1-AC-1 (atomicity), Skill 07 immutability probes
+
+## C-15 — Readiness derivation per §4.4 (EP-4.0) — phase 2
+
+Claim: profile_complete implements the EP-4.0 §4.4 definition exactly;
+company_ready and site_ready are computed from RequirementSatisfaction
+records with specific failing-requirement disclosure (§4.5); site_ready
+requires SiteAssignment in assigned|active; scope separation holds (site
+requirements don't leak into company readiness; project requirements gate
+their sites); no stored readiness flag exists.
+
+- File: M1/src/domain.js — readiness derivation section (profileComplete /
+  companyReady / siteReady), latest-revision applicability
+- SHA: 1af43d6 (operative EP-4.0)
+- Command: `node M1/acceptance-tests/m1-ac-09.test.mjs`
+- Output: `M1-AC-9: PASS`
+- Supports: M1-AC-9
+
+## C-16 — Offline reads, freshness, and durable intent — phase 2
+
+Claim: cached own profile / readiness / assignments are exposed with the
+four-state freshness vocabulary (locally-committed, server-confirmed, stale,
+unknown); only AcknowledgeRequirement is offline-capable per §6.10.2;
+connectivity-required commands attempted offline are locally rejected with
+reason and never queued; offline acknowledgement is durably committed,
+idempotent, transmitted exactly once, and a sync-time rejection
+(superseded requirement) is preserved as an auditable record.
+
+- File: M1/src/domain.js — OFFLINE_CAPABLE_COMMANDS, createCache/cacheRead,
+  executeOffline/transmitQueue
+- SHA: 1af43d6 (operative EP-4.0)
+- Command: `node M1/acceptance-tests/m1-ac-11.test.mjs` and
+  `node M1/evidence/adversarial-probes.mjs`
+- Output: `M1-AC-11: PASS`; probes P12, P18 PASS
+- Supports: M1-AC-11
