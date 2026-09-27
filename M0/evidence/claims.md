@@ -1,0 +1,32 @@
+# M0 Evidence — Claims
+
+Authority: KIMI/SKILLS/06 (required format: Claim | Anchor | Test | Test SHA |
+Impl SHA | Command | Output). Every claim made for M0 is listed; no claim is
+unevidenced. Commands are reproducible from the repository root at the
+implementation commit a9f3c8543f9a0c289b60a7c627fe8a9b79378322.
+
+| Claim | Anchor | Test | Test SHA | Impl SHA | Command | Output |
+|---|---|---|---|---|---|---|
+| All 43 defined §8 constraints (A1–I4 incl. A2a, C5a) have named satisfying mechanisms; none deferred | §8 A–I; §M0.6 M0-AC-1 | m0-ac-01.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-01.test.mjs` | `M0-AC-1: PASS` |
+| AC-ARCH-0.1–0.8 are declared (§8.K) but undefined; recorded as AMB-001, not silently satisfied | §8.K; Skill 01 SILENT class | m0-ac-01.test.mjs (UNVERIFIABLE check) | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `grep -n "AC-ARCH-0\." MASTER_BLUEPRINT/MASTER_BLUEPRINT.md` | single hit: line 1519 (declaration only) |
+| Every §7.3 E/F/C/D type (22 E, 40 F incl. subtypes + HandoverRecord, 7 C, 20 D read models) has a named mechanism | §7.2/§7.3; §M0.6 M0-AC-2 | m0-ac-02.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-02.test.mjs` | `M0-AC-2: PASS` |
+| Offline coverage split: every §6.10.2 mutating action has durable-intent path; every read names cache + freshness; §6.3 included | §6.10.2; §M0.6 M0-AC-3 | m0-ac-03.test.mjs | dc6de2df07ae04dd482ca5a1d3e2d1d8b01bf51c | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-03.test.mjs` | `M0-AC-3: PASS` |
+| CommandOutcome six-state vocabulary with local/server distinction; locally rejected terminal, not queued; one stable client-generated command identity | §M0.3.7; §M0.6 M0-AC-4 | m0-ac-04.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-04.test.mjs` | `M0-AC-4: PASS` |
+| Canonical F mapping for all §7.3 F types; audit derives from F ∪ CommandOutcome; no parallel fact layer | §7.3/§7.8; §M0.6 M0-AC-5; AD-INV-2 | m0-ac-05.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-05.test.mjs` | `M0-AC-5: PASS` |
+| No second source of truth: §M0.2 prohibited channels each closed explicitly | §M0.2; §M0.6 M0-AC-6 | m0-ac-06.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-06.test.mjs` | `M0-AC-6: PASS` |
+| Tenancy/Site boundaries structural (storage keys + bypass analysis); pre-M1 verification test named | §M0.3.1; §M0.6 M0-AC-7; AC-ARCH-B1/B2 | m0-ac-07.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-07.test.mjs` | `M0-AC-7: PASS` |
+| Every M0 document carries blueprint anchors; §M0.3.7 vocabulary used verbatim, not redefined | §M0.6 M0-AC-8; Operating Contract §3 | m0-ac-08.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-08.test.mjs` | `M0-AC-8: PASS` |
+| Declared conflict rule for every conflicting entity class; global LWW explicitly rejected | §6.10.3; §M0.6 M0-AC-9; AC-ARCH-C6 | m0-ac-09.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-09.test.mjs` | `M0-AC-9: PASS` |
+| Salvage boundary respected: full §12 register; zero promotions; no M0 commit touches governed inputs or AC-04 code | §M0.4; §12; §M0.6 M0-AC-10 | m0-ac-10.test.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `node M0/acceptance-tests/m0-ac-10.test.mjs` | `M0-AC-10: PASS` |
+| Test layer predates implementation (INV-C) | §5 INV-C; Skill 04 | run-all.mjs ancestry | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `git merge-base --is-ancestor eede51d a9f3c85; echo $?` | `0` |
+| Baseline result was FAIL/ABSENT for all ten tests | Skill 04 step 4 | run-all.mjs | eede51d75cc504e9a6fe909473b5464afdb46605 | — | `node M0/acceptance-tests/run-all.mjs` at eede51d | `M0 GATE: 0/10 PASS, 10 FAIL` (all ABSENT) |
+| sitesync/ is byte-identical to baseline f90b77ab at EP-1.0 | §12 baseline; M0 contract input | m0-ac-10 git check | eede51d75cc504e9a6fe909473b5464afdb46605 | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `git diff --stat f90b77ab73cb7ae20b1084ad94fb5bc159afa841 HEAD -- sitesync/` | empty |
+| EVIDENCE/AC-04_BASELINE/ absent at EP-1.0, consistent with declared PARTIAL status | M0 contract input #4; §M0.5 | — | — | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `git ls-tree -r --name-only EP-1.0 \| grep -c EVIDENCE` | `0` |
+| No pre-start/communication/reporting/admin implementation exists in AC-04 code (pending-extraction expectations hold) | §6.4.8/§6.8.8/§6.9.8 expectations | — | — | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `grep -ril "pre.start" sitesync/src sitesync/__tests__` | empty |
+| AC-04 identity schema is organisation-scoped (persons, organisations, company_memberships, project_assignments) confirming §6.3.8/§7.14 CONFLICT | §6.3.8; §7.14; §12 leak note | — | — | a9f3c8543f9a0c289b60a7c627fe8a9b79378322 | `grep -oiE "create table( if not exists)? [a-z_.]+" sitesync/supabase/migrations/20260815000000_init_identity_tenancy.sql` | organisations, persons, user_profiles, companies, company_memberships, projects, project_company_participation, project_assignments |
+
+What was NOT done and why: no M1 implementation (prohibited); no schema
+migration (prohibited); no salvage promotion (§M0.4); no blueprint
+modification (prohibited); §6.4/§6.8/§6.9/§6.11 extractions not performed
+(§M0.5 — do not block M0; M0 architecture does not depend on them, see
+M0/pending-extractions.md); §8.M technology selections not made (§8.J).
