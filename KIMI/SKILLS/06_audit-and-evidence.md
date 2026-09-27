@@ -1,49 +1,73 @@
-# SKILL 06: Audit and Evidence
+# Skill 06 — Audit and Evidence
 
-Version: v1.0
-Date: 2026-09-26
-
----
+*This skill is addressed to the agent operating under the EP.
+Where it says "you", it means you.*
 
 ## Purpose
+Ensure every claim you make is evidenced, every milestone produces an
+evidence bundle, and every artifact is verifiable.
 
-Ensure that every state change in SITE-SYNC is recorded as a fact with proper authority, timestamp, and evidence. The audit trail is the ultimate source of truth.
+## When invoked
+- At the end of every milestone.
+- Whenever you claim "done".
+- Whenever you record the adversarial auditor's findings.
 
-## Triggers
+## Authority basis
+- §5 (DoD)
+- M0 evidence bundle specification
+- §7.8 (audit trail as projection)
+- §8 AC-ARCH-D1 through D6
 
-- Implementing any mutation
-- Implementing any fact recording
-- Implementing any evidence capture
-- Reviewing any code that changes state
-- Preparing any milestone report
+## Procedure
 
-## Process
+1. Enumerate every claim made during the milestone.
+   - "X is implemented."
+   - "Y satisfies Z."
+   - "W is compatible with §8."
 
-1. Verify that every state change is recorded as a fact.
-2. Verify that every fact has: fact_id, fact_type, entity_type, entity_id, actor_id, authority_scope, timestamp, payload, sync_state.
-3. Verify that evidence is captured for operations that require it (per acceptance criteria).
-4. Verify that evidence is hashed (SHA-256) at capture.
-5. Verify that the audit trail is append-only and immutable.
-6. Verify that audit trail access is logged.
+2. For each claim, provide evidence:
+   - file path + line range (where applicable)
+   - commit SHA
+   - command run
+   - exact output
+   - which AC the claim satisfies
+   - which test proves it
 
-## Rules
+3. Produce the evidence bundle:
+       M<n>/evidence/
+         claims.md            — every claim with anchor + evidence
+         acceptance-map.md    — each M<n>-AC mapped to test + evidence
+         adversarial.md       — findings, dispositions, unresolved
+         open-items.md        — unresolved, deferred, escalated
+         state.md             — commit SHA, CI status, migration state
 
-- Every state change is a fact. No exceptions.
-- Facts are immutable. No modifications, no deletions.
-- Facts carry authority scope. Facts recorded without valid authority are flagged.
-- Evidence is hashed at capture. Hash verification is available at any time.
-- The audit trail is append-only. No modifications, no deletions.
-- Audit trail access requires appropriate authority. Access is logged as a fact.
-- Milestone reports include fact counts, types, and key facts as evidence.
+4. Ensure no claim is unevidenced.
+   - "Trust me" is not evidence.
+   - "The tests pass" alone is not evidence (must name which tests).
+   - "It should work" is never evidence.
 
-## Output
+5. Record what was NOT done and why.
+   - Deferred items, their reasons, and their target milestones.
 
-For each feature, produce:
-- Facts recorded (types, counts).
-- Evidence captured (types, hashes).
-- Audit trail verification.
-- Authority verification.
+6. Record unresolved findings.
+   - Adversarial findings not resolved.
+   - Ambiguities not yet resolved.
+   - Pending extractions not yet performed.
 
----
+## Required output format
+    | Claim | Anchor | Test | Test SHA | Impl SHA | Command | Output |
 
-END OF SKILL 06
+## Anti-patterns — do not accept these framings
+- Claims without anchors.
+- Tests without SHAs.
+- "Tests pass" without naming the tests.
+- Hidden deferred items.
+- Hidden unresolved findings.
+- Evidence that cannot be reproduced.
+
+## Self-check before completing work
+- [ ] Every claim has an anchor and evidence.
+- [ ] Every AC has a passing test with SHAs.
+- [ ] Every unresolved finding is explicit.
+- [ ] Every deferred item names a target milestone.
+- [ ] The evidence bundle is reproducible by a third party.

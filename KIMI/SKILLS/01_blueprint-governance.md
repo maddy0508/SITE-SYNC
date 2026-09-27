@@ -1,49 +1,63 @@
-# SKILL 01: Blueprint Governance
+# Skill 01 — Blueprint Governance
 
-Version: v1.0
-Date: 2026-09-26
-
----
+*This skill is addressed to the agent operating under the EP.
+Where it says "you", it means you.*
 
 ## Purpose
+Ensure you treat the Master Blueprint as authoritative and never silently
+resolve ambiguity, contradiction, or silence through implementation choice.
 
-Ensure that all work on SITE-SYNC aligns with the Master Blueprint. The blueprint is the authoritative source. No work may contradict it.
+## When invoked
+- Before any architectural, test, or implementation decision.
+- Whenever a requirement appears missing, ambiguous, or conflicting.
+- Whenever you are tempted to "just decide" something.
 
-## Triggers
+## Authority basis
+- Master Blueprint §0.1 (version register)
+- §7 (Conceptual Data Model) — especially DM-INV-1 through DM-INV-12
+- §8 (Architectural Constraints)
+- M0 §M0.4 (salvage boundary), §M0.5 (extraction gate)
 
-- Starting any milestone
-- Making any architectural decision
-- Adding or modifying any feature
-- Changing any data model
-- Changing any API
-- Changing any UI flow
+## Procedure
 
-## Process
+1. Identify the authoritative version.
+   - Consult §0.1. A section means base version + recorded amendments.
+   - If two versions exist, the newer recorded one governs.
 
-1. Read the Master Blueprint section relevant to the work.
-2. Identify applicable invariants, constraints, and acceptance criteria.
-3. Verify that the proposed work aligns with the blueprint.
-4. If there is a conflict, STOP and report to the human approver.
-5. If there is no conflict, proceed and document the alignment.
+2. Locate the anchor.
+   - Find the specific §, INV, or AC that governs the decision.
+   - If no anchor exists, the blueprint is silent on this point.
 
-## Rules
+3. Classify the decision.
+   | Class | Meaning | Your action |
+   |---|---|---|
+   | ANCHORED | Blueprint answers | Proceed, cite anchor |
+   | AMBIGUOUS | Blueprint could answer but is unclear | Raise AMBIGUITY_RECORD |
+   | SILENT | Blueprint does not address | Raise AMBIGUITY_RECORD |
+   | CONFLICTING | Two sections disagree | Raise AMBIGUITY_RECORD |
+   | LOCKED-OPEN | Explicitly marked OPEN | Do not decide; track as open |
 
-- The blueprint is authoritative. Code that contradicts the blueprint is wrong, regardless of how well it works.
-- Invariants are non-negotiable. They are listed in §2.4 of the blueprint.
-- Constraints are non-negotiable. They are listed in §15 of the blueprint.
-- Acceptance criteria are the definition of done. They are listed in Part C of the blueprint.
-- If the blueprint is ambiguous, report the ambiguity. Do not guess.
-- If the blueprint is silent, report the gap. Do not assume.
+4. Do not resolve AMBIGUOUS, SILENT, or CONFLICTING via implementation.
+   Even if the "obvious" answer exists. Even if it would be faster.
+   Even if the alternative would block progress.
 
-## Output
+5. Record the anchor in the artifact.
+   - Every architecture decision, test, salvage promotion cites §/INV/AC.
 
-For each work item, produce:
-- Blueprint sections consulted.
-- Invariants and constraints verified.
-- Acceptance criteria applicable.
-- Conflicts or ambiguities found (if any).
-- Alignment statement.
+## Outputs
+- Anchors cited on every artifact
+- AMBIGUITY_RECORD for each ANCHORED-adjacent class
+- A running list of LOCKED-OPEN items with their resolution gates
 
----
+## Anti-patterns — do not accept these framings
+- "The blueprint doesn't say, so I'll choose the pragmatic option."
+- "This is obviously what the blueprint meant."
+- "I'll implement it and adjust later if the blueprint disagrees."
+- Silently weakening an invariant because it is inconvenient.
+- Treating a draft/open decision as though it were locked.
 
-END OF SKILL 01
+## Self-check before completing work
+- [ ] Every decision has a cited anchor.
+- [ ] Every ambiguity is raised, not resolved.
+- [ ] Every LOCKED-OPEN item is tracked, not acted on.
+- [ ] No implementation has resolved a blueprint gap.

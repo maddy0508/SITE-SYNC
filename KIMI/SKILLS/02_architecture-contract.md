@@ -1,52 +1,93 @@
-# SKILL 02: Architecture Contract
+# Skill 02 — Architecture Contract
 
-Version: v1.0
-Date: 2026-09-26
-
----
+*This skill is addressed to the agent operating under the EP.
+Where it says "you", it means you.*
 
 ## Purpose
+Translate the locked blueprint into an architecture that satisfies §8 without
+introducing a second source of truth, stored domain booleans, hidden lifecycle,
+or any rejected pattern.
 
-Ensure that the SITE-SYNC architecture adheres to the Architecture Contract (Part B of the Master Blueprint). The architecture contract is binding.
+## When invoked
+- At every milestone where architecture is required (M0, and any milestone
+  introducing new mechanisms).
+- Whenever a mechanism must be named for an E/F/C/D type.
 
-## Triggers
+## Authority basis
+- §7 (Conceptual Data Model)
+- §8 (Architectural Constraints), all of A through I
+- M0 §M0.3.1 through §M0.3.18
+- M0 §M0.6 acceptance criteria
 
-- Designing any new component
-- Modifying any existing component
-- Adding any new dependency
-- Changing any data flow
-- Changing any API contract
+## Procedure
 
-## Process
+1. Enumerate blueprint obligations for the milestone.
+   - For each §6 section in scope, list its E, F, C, D types.
+   - For each, list the invariants it must satisfy.
 
-1. Read the Architecture Contract section relevant to the work.
-2. Identify applicable architecture principles (AC-ARCH-*).
-3. Identify applicable data architecture rules (AC-DATA-*).
-4. Identify applicable sync architecture rules (AC-SYNC-*).
-5. Identify applicable API architecture rules (AC-API-*).
-6. Verify that the proposed architecture aligns with the contract.
-7. If there is a conflict, STOP and report to the human approver.
-8. If there is no conflict, proceed and document the alignment.
+2. Map each E/F/C/D type to a mechanism.
+   - E: identity storage + creation fact + applicable domain facts.
+   - F: write-once storage; no update path.
+   - C: authoritative current-value storage.
+   - D: recomputable projection; materialisation optional.
 
-## Rules
+3. Identify authority boundaries.
+   - Which operations are local-authoritative.
+   - Which are server-authoritative (§6.10, DM-INV-10).
+   - Which are declared per-entity-class conflicts (§6.10.3).
 
-- Fact-sourced architecture (AC-ARCH-1) is non-negotiable. All state is derived from facts.
-- Offline-first (AC-ARCH-2) is non-negotiable. All daily operations work offline.
-- Tenant isolation (AC-ARCH-3) is non-negotiable. No cross-tenant data access.
-- Authority-scoped operations (AC-ARCH-4) are non-negotiable. Every operation carries an authority scope.
-- Immutable audit trail (AC-ARCH-5) is non-negotiable. Facts are immutable and append-only.
-- Evidence integrity (AC-ARCH-6) is non-negotiable. All evidence is hashed and verifiable.
-- Deterministic sync (AC-ARCH-7) is non-negotiable. Same facts, same state, regardless of order.
-- Local-first read models (AC-ARCH-8) are non-negotiable. Read models are computed locally from the local fact store.
+4. Identify offline requirements.
+   - Which mutations are offline-capable (§6.10.2 and each section's
+     offline sub-list).
+   - Durable-intent mechanism per mutation.
+   - Local cache / read model for offline reads.
+   - Freshness exposure.
 
-## Output
+5. Identify conflict semantics.
+   - Per-entity-class, not global.
+   - Name the rule for each entity class that can conflict.
 
-For each architecture decision, produce:
-- Architecture contract sections consulted.
-- Principles verified.
-- Conflicts found (if any).
-- Alignment statement.
+6. Detect second sources of truth.
+   - Audit must derive from F ∪ CommandOutcome.
+   - Reports must be D only.
+   - Communication must be context-only, no facts.
+   - Admin must produce canonical domain F records, no parallel admin log.
 
----
+7. Produce the architecture document naming every mechanism.
 
-END OF SKILL 02
+## Required output format
+    M0/architecture.md
+      §A. Tenancy and scope isolation (with bypass analysis)
+      §B. Identity
+      §C. E/F/C/D persistence
+      §D. Immutable facts
+      §E. Derived state
+      §F. Command processing + CommandOutcome (with local/server distinction)
+      §G. Idempotency
+      §H. Offline durable intent
+      §I. Sync and reconciliation
+      §J. Per-entity conflict rules
+      §K. Audit
+      §L. Freshness
+      §M. Authorization
+      §N. Device identity
+      §O. Retention destruction
+      §P. Android / local persistence
+      §Q. Server persistence
+
+## Anti-patterns — do not accept these framings
+- "We'll figure out the D model later." D must be recomputable from day one.
+- "The audit table is our source of truth." Audit derives from F.
+- "We store a status column for speed." Permitted only as a materialisation.
+- "We handle all conflicts with LWW." Rejected by AC-ARCH-C6.
+- "The client and server do the same thing." Rejected by AC-ARCH-C3.
+- "Admin has its own audit log." Rejected by AD-INV-2.
+
+## Self-check before completing work
+- [ ] Every E/F/C/D type has a named mechanism.
+- [ ] Every §8 constraint is satisfied or formally deferred (with target).
+- [ ] Local/server distinction is explicit for every command outcome.
+- [ ] Per-entity conflict rules are declared.
+- [ ] No second source of truth exists.
+- [ ] No stored domain boolean is authoritative.
+- [ ] Audit derives from F ∪ CommandOutcome only.

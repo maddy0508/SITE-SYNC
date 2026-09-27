@@ -1,58 +1,95 @@
-# SKILL 04: Acceptance Test Design
+# Skill 04 — Acceptance Test Design
 
-Version: v1.0.1
-Date: 2026-09-26
-
----
+*This skill is addressed to the agent operating under the EP.
+Where it says "you", it means you.*
 
 ## Purpose
+Enforce INV-C: no implementation without a test that predates it.
 
-Design acceptance tests from the Master Blueprint's acceptance criteria. Every acceptance criterion must have at least one test. Tests are the executable definition of done.
+## When invoked
+- Before you write any code for a requirement.
+- Before promoting any SALVAGE item.
+- At every milestone's DoD verification.
 
-## Triggers
+## Authority basis
+- §5 (Definition of Done, INV-C)
+- §8 AC-ARCH-D2 (audit fields on every F record)
+- Every §6 section's AC-* list
+- M0 §M0.6 (acceptance criteria)
 
-- Starting any milestone
-- Before implementing any feature
-- After any acceptance criterion is added or modified
+## Procedure
 
-## Process
+1. Identify the requirement.
+   - Cite the specific §/INV/AC.
+   - If no anchor exists, escalate. Do not design a test for an unanchored requirement.
 
-1. Read the acceptance criteria relevant to the milestone.
-2. For each criterion, design one or more tests.
-3. Tests must be executable, not aspirational.
-4. Tests must verify the criterion, not just exercise the code.
-5. Tests must be independent of implementation details.
-6. Tests must cover the Given/When/Then structure of the criterion.
-7. Tests must specify the evidence they produce.
+2. Derive the acceptance criterion.
+   - It must be observable.
+   - It must be falsifiable.
+   - It must be specific to a behaviour, not a general property.
 
-## Rules
+3. Design the test before implementation.
+   - What is the setup?
+   - What is the action?
+   - What is the observable outcome?
+   - What is the negative case? (The case where the invariant must fail.)
 
-- Every acceptance criterion must have at least one test.
-- Tests are written before or alongside implementation (test-first or test-alongside).
-- Tests must be automated. Manual tests are acceptable only for criteria that cannot be automated (e.g., usability).
-- Tests must produce evidence: pass/fail, coverage, screenshots, performance measurements.
-- Tests must be deterministic. Flaky tests are not acceptable.
-- Tests must be maintainable. Tests that are harder to maintain than the code they test are not acceptable.
+4. The test must be executable against the baseline and must fail, or
+   demonstrate the absence of the required behaviour, before the
+   implementation is introduced.
 
-## Test types
+   For code-level acceptance criteria, the test runs against the
+   pre-implementation baseline (the commit before implementation begins) and
+   must produce a FAIL result — either by assertion failure or by the
+   required behaviour being absent.
 
-- **Unit tests**: test individual functions and methods.
-- **Integration tests**: test component interactions, API endpoints, database operations.
-- **E2E tests**: test complete user flows.
-- **Offline tests**: test operations without network connectivity.
-- **Sync tests**: test sync conflict resolution, deterministic sync, sync ordering.
-- **Performance tests**: test performance acceptance criteria.
-- **Security tests**: test security acceptance criteria.
+   For architecture-level acceptance criteria (M0-AC-1 through M0-AC-10 and
+   similar), the test is a structural or contract test against the produced
+   artifacts. It must still be executable and falsifiable: for example, a
+   script that parses `architecture.md`, checks that every E/F/C/D type in
+   §7 has a named mechanism, and exits non-zero if any is missing.
 
-## Output
+   "Not yet applicable" is not a valid test state. If a test cannot be
+   executed against something, it is not yet a test.
 
-For each acceptance criterion, produce:
-- Test description.
-- Test type.
-- Given/When/Then mapping.
-- Expected evidence.
-- Test file path.
+5. Commit the test.
+   - Record the test's commit SHA.
+   - Record the baseline result (`FAIL` or `ABSENT`).
 
----
+6. Implement to satisfy the test.
+   - Record the implementation commit's SHA.
+   - The test must pass at the implementation commit.
 
-END OF SKILL 04
+7. Record the sequence.
+       test_commit_sha: <sha>
+       baseline_result: FAIL
+       impl_commit_sha: <sha>
+       implementation_result: PASS
+       test_precedes_impl: YES
+
+   `test_precedes_impl: NO` invalidates INV-C compliance for that AC.
+
+## Required output format
+    | AC | Requirement anchor | Test file | Test SHA | Baseline result | Impl SHA | Impl result | Precedes? |
+
+Where:
+- `baseline_result` ∈ { `FAIL`, `ABSENT` } — never `N/A`
+- `impl_result` ∈ { `PASS`, `FAIL` }
+- `precedes?` = `YES` iff `test_sha` is an ancestor of `impl_sha`
+
+## Anti-patterns — do not accept these framings
+- Writing a test that asserts current behaviour.
+- Writing a test after seeing the implementation.
+- Writing a test that would pass with or without the requirement.
+- Writing a "negative test" that does not exercise the failure path.
+- Writing tests that assert implementation details rather than behaviour.
+
+## Self-check before completing work
+- [ ] Every acceptance criterion has a test.
+- [ ] Every test's SHA precedes its implementation's SHA.
+- [ ] Every test is falsifiable.
+- [ ] Negative cases exist for every invariant.
+- [ ] No test was retro-fitted to bless implementation.
+- [ ] Every code-level test's baseline result is `FAIL` or `ABSENT`.
+- [ ] Every architecture-level test is a structural test against named artifacts.
+- [ ] No test is recorded as "not yet applicable."

@@ -1,68 +1,118 @@
-# SKILL 07: Adversarial Audit
+# Skill 07 — Adversarial Audit
 
-Version: v1.0
-Date: 2026-09-26
-
----
+*This skill is addressed to the agent operating under the EP.
+Where it says "you", it means you.*
 
 ## Purpose
+Systematically ask how the implementation could *appear* correct while
+violating the blueprint.
 
-Adversarially audit SITE-SYNC implementation to find gaps, contradictions, inefficiencies, and violations of the Master Blueprint. The adversarial auditor's job is to find problems, not to confirm that everything is fine.
+## When invoked
+- At every milestone's closure.
+- Whenever an invariant is asserted.
+- Whenever a mechanism is claimed to satisfy §8.
 
-## Triggers
+## Authority basis
+- §8 (all constraints), especially A4, B1, C3, C6, C8, D1, E3, H1, H5
+- §7 (DM-INV-1 through DM-INV-12)
+- Each section's INV list
 
-- After any milestone completion
-- Before any deployment
-- After any significant refactoring
-- When requested by the human approver
+## Procedure
 
-## Process
+For each invariant claimed to be satisfied, ask the adversarial question.
 
-1. Read the Master Blueprint.
-2. Read the milestone contract.
-3. Read the implementation.
-4. Look for gaps: blueprint requirements not implemented.
-5. Look for contradictions: implementation that contradicts the blueprint.
-6. Look for violations: implementation that violates invariants or constraints.
-7. Look for inefficiencies: implementation that is unnecessarily complex or slow.
-8. Look for security issues: implementation that has vulnerabilities.
-9. Look for test gaps: acceptance criteria without tests, or tests that don't verify the criterion.
-10. Report all findings with specific evidence.
+### Tenancy and isolation (§8.B1)
+- Can a privileged DB role bypass tenant isolation?
+- Can an application-layer path access another Company's data?
+- Can a cross-Company reference be created indirectly?
 
-## Questions to answer
+### Identity and dual-keying (§8.A2)
+- Can two commands produce two entities for one logical action?
+- Can an entity's identity change across local/server?
+- Can a successor identity be re-used?
 
-- Does every acceptance criterion have a passing test?
-- Does every state change record a fact?
-- Does every fact carry authority scope?
-- Does every evidence file have a verifiable hash?
-- Does every offline-capable operation work offline?
-- Does every connectivity-required operation fail gracefully offline?
-- Is the audit trail append-only and immutable?
-- Is tenant isolation enforced?
-- Is sync deterministic?
-- Is conflict resolution correct?
-- Are there any hidden online assumptions?
-- Are there any bypass mechanisms?
-- Are there any parallel audit, reporting, or admin layers?
+### Immutability (§8.D4, §7 DM-INV-2)
+- Can any user path edit an F record?
+- Can an F record be deleted via cascade?
+- Can retention destruction be triggered from a user action?
+
+### Derived vs authoritative (§8.A4, §8.E3, §7 DM-INV-3)
+- Can a stored D value become authoritative?
+- Can an F record read a D value as input?
+- Can a D value and its source disagree silently?
+
+### Offline durability (§8.C1, §8.G3)
+- Can a committed action disappear after restart?
+- Can a queued action be dropped without disclosure?
+- Can a local rejection be queued anyway?
+
+### Idempotency (§8.G1)
+- Can duplicate delivery of the same command apply twice?
+- Can a server-assigned identity undermine client identity?
+
+### Conflict semantics (§8.C6)
+- Can two entities resolve conflicts by different rules than declared?
+- Can a conflict resolve silently?
+- Can a conflict resolution be lost?
+
+### Audit (§8.D1)
+- Can a rejected command disappear from the audit trail?
+- Can a domain mutation occur without an F record?
+- Can an audit entry exist without a corresponding fact?
+
+### Second source of truth (§8.A1, M0-AC-6)
 - Is there a reporting layer that is authoritative?
-- Are derived values presented as the source of truth?
+- Is there an admin log separate from F?
+- Is there a messaging store that becomes a fact?
+- Is there a "shadow" state updated independently of F?
 
-## Rules
+### Offline reads (§8.F1, §8.E2)
+- Is stale data presented as current?
+- Is freshness indicated?
+- Is a locally committed fact presented as server-confirmed?
 
-- The adversarial auditor is not the implementer. The auditor reviews, the implementer builds.
-- The adversarial auditor reports findings, not fixes. Fixes are the implementer's responsibility.
-- All findings must be backed by specific evidence: code references, test results, or behavior demonstrations.
-- Findings are classified by severity: critical (blueprint violation), major (functional gap), minor (inefficiency or inconsistency).
-- The adversarial auditor does not approve or reject milestones. The human approver approves or rejects.
+### QR and identity (§6.3)
+- Can an old QR still create attendance?
+- Can a retired QR be re-used?
+- Can two active QRs exist?
+- Can zero active QRs exist for an active Worker?
 
-## Output
+### Progress and completion (§6.6)
+- Can an asset store `complete = true` as authority?
+- Can a claim be verified twice?
+- Can a claim survive reversal as if nothing happened?
+- Can a CRITICAL blocker be bypassed at claim or verification?
 
-Produce an adversarial audit report containing:
-- Findings (classified by severity, with specific evidence).
-- Questions answered (yes/no with evidence).
-- Recommendations for fixes.
-- Overall assessment.
+### Attendance (§6.5)
+- Can a check-out precede its check-in?
+- Can a shift overlap another shift?
+- Can a readiness gate be bypassed offline?
+- Can a work date be computed differently offline and online?
 
----
+### Archive/retention (§8.H)
+- Can an archived Site receive new facts?
+- Can a hard-delete be reached from a user path?
+- Can RetentionDestructionEvent be destroyed by the retention it caused?
 
-END OF SKILL 07
+## Required output format
+
+    M<n>/evidence/adversarial.md
+
+    | # | Attack | Section | Result | Evidence | Disposition |
+
+Dispositions:
+- MITIGATED — invariant holds, evidence provided
+- EXPOSED — invariant can be violated; raises BLOCKER_RECORD
+- DEFERRED — cannot yet be tested; named milestone
+
+## Anti-patterns — do not accept these framings
+- Asking "does this work?" instead of "how could this fail?"
+- Accepting "the tests pass" as adversarial evidence.
+- Skipping an invariant because it "seems fine."
+- Failing to record an exposed finding.
+
+## Self-check before completing work
+- [ ] Every §8 constraint has been adversarially tested.
+- [ ] Every exposed finding is a BLOCKER_RECORD.
+- [ ] Every deferred test names its target milestone.
+- [ ] The adversarial log is part of the evidence bundle.

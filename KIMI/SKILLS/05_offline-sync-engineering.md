@@ -1,51 +1,70 @@
-# SKILL 05: Offline-Sync Engineering
+# Skill 05 — Offline Sync Engineering
 
-Version: v1.0
-Date: 2026-09-26
-
----
+*This skill is addressed to the agent operating under the EP.
+Where it says "you", it means you.*
 
 ## Purpose
+Ensure SITE-SYNC's offline-first model is implemented correctly, without
+compromising the invariants in §6.10, §7, and §8.
 
-Ensure SITE-SYNC's offline-first model is implemented correctly, without introducing hidden online assumptions. Offline is the default, not the exception.
+## When invoked
+- Any time you implement an offline-capable mutation.
+- Any time you design a command, queue, sync, conflict, or reconciliation mechanism.
+- Any time you implement a read-only offline capability.
 
-## Triggers
+## Authority basis
+- §6.10 (Offline / Sync)
+- §7.10 (two-sided source-of-truth)
+- §8 AC-ARCH-C1 through C10, E1 through E4, F1 through F4, G1 through G5
+- M0 §M0.3.6 through §M0.3.11
 
-- Implementing any feature that records facts
-- Implementing any feature that reads state
-- Implementing any sync functionality
-- Implementing any conflict resolution
-- Reviewing any code that touches the network
+## Procedure
 
-## Process
+1. Classify the operation.
+   | Class | Requirement |
+   |---|---|
+   | Offline-mutating | Durable local commit + command identity + queue |
+   | Offline read-only | Cached read model + freshness state |
+   | Connectivity-required | Reject locally when offline, with reason |
 
-1. Identify whether the operation is offline-capable or connectivity-required (per §7.2 of the blueprint).
-2. If offline-capable: verify that the operation works without network. Verify that the fact is recorded locally. Verify that the fact is queued for sync.
-3. If connectivity-required: verify that the operation fails gracefully offline. Verify that the failure reason is clear to the user.
-4. Verify that sync is deterministic: same facts, same state, regardless of order.
-5. Verify that conflict resolution follows the rules in §7.4 of the blueprint.
-6. Verify that sync retry follows the backoff schedule in AC-SYNC-6.
+2. For offline-mutating operations, verify:
+   - [ ] Local commit is durable before user confirmation (C1).
+   - [ ] Command identity is client-generated, stable across retry, restart, duplicate (C2).
+   - [ ] Local commit and local F record(s) are atomic (C3).
+   - [ ] Command outcome is one of accepted/rejected/failed/conflicted (C5).
+   - [ ] Locally-rejected commands are terminal, not queued (C5+).
+   - [ ] Per-entity ordering is enforced (C4).
+   - [ ] Conflict rule is declared per entity class (C6).
+   - [ ] Reconciliation converges or discloses (C7).
+   - [ ] Two-sided source-of-truth preserved (C8).
+   - [ ] Local/server identities match (A2).
 
-## Rules
+3. For offline read-only operations, verify:
+   - [ ] Named cache/read model exists.
+   - [ ] Freshness state is exposed (E2).
+   - [ ] Stale data is not presented as current.
+   - [ ] Read does not write to F (E3).
 
-- All daily operations must work offline. No exceptions.
-- Facts recorded offline are queued for sync. They are not lost.
-- Sync is bidirectional and deterministic.
-- Conflict resolution follows the blueprint rules. No ad-hoc resolution.
-- Sync retry is automatic with exponential backoff.
-- Sync notification is via WebSocket after server confirmation.
-- Local read models are computed from the local fact store. They are disposable and rebuildable.
-- Server-computed read models are cached and marked with freshness.
+4. For connectivity-required operations, verify:
+   - [ ] Attempts fail locally with a specific reason.
+   - [ ] No partial queue entry is created.
 
-## Output
+5. Test adversarial cases (see Skill 07).
 
-For each feature, produce:
-- Offline capability classification (offline-capable or connectivity-required).
-- Offline behavior verification.
-- Sync behavior verification.
-- Conflict resolution verification (if applicable).
-- Test results.
+## Anti-patterns — do not accept these framings
+- "We'll queue everything and figure it out." Rejected by C6.
+- "LWW everywhere." Rejected by C6.
+- "The client is a cache." Rejected by C8.
+- "Server is authoritative for everything." Rejected by C8.
+- "Local commits are best-effort." Rejected by C1.
+- "Dual-keying with client UUID and server UUID." Rejected by A2.
+- "We don't need per-entity conflict rules." Rejected by C6.
 
----
-
-END OF SKILL 05
+## Self-check before completing work
+- [ ] Every offline mutation has durable intent + identity + atomicity.
+- [ ] Every offline read has cache + freshness.
+- [ ] Every connectivity-required operation fails locally with reason.
+- [ ] Per-entity conflict rules are declared.
+- [ ] No second source of truth.
+- [ ] No silent loss.
+- [ ] Command outcome vocabulary is `accepted/rejected/failed/conflicted`.

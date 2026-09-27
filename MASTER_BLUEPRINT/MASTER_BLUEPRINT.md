@@ -1,1326 +1,1668 @@
 SITE-SYNC_MASTER_BLUEPRINT.md
 
-Status: AUTHORITATIVE SOURCE
-Version: v1.0
-Date: 2026-09-26
-Owner: Maddy McKellar
-Applies to: SITE-SYNC product, platform, delivery, and governance
+Version: 1.0 — FINAL / LOCKED
+Status: All sections locked. M0 locked at v1.0.1. Blueprint frozen.
+Note: Where a section locked at a base version plus recorded amendments, the amendments are integrated below. The version column in §0.1 records what was actually locked.
 
 ---
 
-# PART A — IDENTITY
+§0.1 — Version register
 
-## 1. Product identity
+Section Locked version
+§1 Vision, scope, non-goals v0.1
+§2 Roles v0.1
+§3 Complete lifecycle v0.1
+§4 Onboarding / induction v0.1.1
+§5 Definition of Done v0.1
+§6.1 Projects & Sites v0.2
+§6.2 Map / Site Operating Surface v0.5
+§6.3 Workers & Crews v0.9.2
+§6.4 Daily Operations / Pre-starts v0.11.1
+§6.5 Attendance & Timesheets v0.3 + FORCE_CLOSE + pre-start gating
+§6.6 Progress v0.6
+§6.7 QA / Evidence / Blockers v0.4 + 2 amendments
+§6.8 Communication v0.13.1
+§6.9 Reporting v0.12.1
+§6.10 Offline / Sync v0.2
+§6.11 Administration v0.10.1
+§7 Conceptual Data Model v0.7.2 + §6.3/§6.4/§6.9 catalogue amendments
+§8 Architectural Constraints v0.8.1
+§11 Milestone map provisional / arch-gated
+§12 Salvage register partial
+M0 Product / Architecture Contract v1.0.1
 
-### 1.1 What SITE-SYNC is
+---
+
+§1 — Vision, scope, non-goals
+
+1.1 What SITE-SYNC is
 
 SITE-SYNC is an Android-first, local-first site-work platform for construction and infrastructure projects. It is the operational surface where a company registers, workers are onboarded and inducted, projects and sites are created, work is assigned and evidenced against a map of physical assets, attendance and timesheets are captured, QA and blockers are recorded, and everything is auditable — including when the device is offline.
 
-SITE-SYNC is not a drawing tool, not a BIM authoring tool, not a messaging app, not a payroll engine, not an ERP, not a document management system, and not a generic project-management suite. It is the operational record of physical work and the coordination layer around that record.
+1.2 What SITE-SYNC is not
 
-### 1.2 What SITE-SYNC is not
+· Not a generic HR system.
+· Not a payroll engine (produces timesheet inputs, not payments).
+· Not a CAD or design tool.
+· Not a chat replacement (communication is contextual).
+· Not web-first. Android field use is primary; web/admin is derived.
 
-SITE-SYNC does not replace CAD, BIM, scheduling, payroll, or accounting software. It does not store drawings as its primary data model. It does not provide free-form chat. It does not compute salaries. It does not manage procurement.
+1.3 Scope of v1
 
-SITE-SYNC integrates with these systems where necessary but never absorbs them.
+Company registration, worker onboarding and induction, projects and sites, map operating surface, workers and crews, daily operations, QR attendance and timesheets, tasks and progress, QA/evidence/blockers, communication, reporting, offline/sync, administration.
 
-### 1.3 Single sentence
+1.4 Non-goals of v1
 
-SITE-SYNC is the offline-first operational record and coordination platform for physical construction work, from worker induction to evidence-backed progress to audit.
-
----
-
-## 2. Domain
-
-### 2.1 Domain statement
-
-SITE-SYNC operates in the construction and infrastructure site-work domain: the coordination of people, work, and physical assets on a site, with evidence capture, attendance, QA, and audit, under conditions of intermittent connectivity.
-
-### 2.2 Domain boundaries
-
-In scope: company and worker onboarding; project and site management; physical asset mapping; task assignment and execution; QR-based attendance; timesheets; QA and evidence capture; blockers; reporting; offline-first operation; audit trail.
-
-Out of scope: CAD/BIM authoring; payroll computation; procurement; accounting; free-form messaging; document management as a primary function.
-
-### 2.3 Core domain objects
-
-Company, Worker, Project, Site, Asset (physical: pile, footing, column, slab, pipe segment, etc.), WorkArea (spatial grouping of Assets), Task, Shift, AttendanceRecord, Timesheet, QARecord, Evidence, Blocker, Crew, Invitation, Report.
-
-### 2.4 Domain invariants
-
-1. Every fact about physical work traces to a specific Asset or WorkArea on a specific Site.
-2. Every fact about a person traces to a specific Worker enrolled in a specific Company.
-3. Every mutation is a fact (F record) with an actor, a timestamp, and an audit trail.
-4. No fact is deleted; facts are superseded or retired.
-5. Offline operation is the default, not the exception. The platform must function fully for a worker's daily operations without connectivity.
-6. Sync is deterministic: the same set of facts always converges to the same state regardless of order of arrival.
-7. Authority is explicit: every fact carries the authority under which it was recorded.
-8. A worker's device is a trusted endpoint for that worker's facts only. Cross-entity facts require server authority.
+Multi-tenant billing, marketplace features, third-party payroll integrations, iOS native, desktop native, external API marketplace.
 
 ---
 
-## 3. Actors and roles
+§2 — Roles
 
-### 3.1 Actor taxonomy
+Five product-level roles. Role ≠ person ≠ company membership ≠ project assignment.
 
-**Platform Admin** — SITE-SYNC operator. Manages tenants, escalation, platform-level configuration. Not a company role.
+· Worker — performs site work, signs in/out, completes tasks, submits evidence, raises blockers.
+· Supervisor — leads a crew on a site, assigns work, verifies attendance, resolves blockers, communicates with workers.
+· Company Admin — owns the company account, manages users, roles, projects, documents, and configuration.
+· EPC / Client — external stakeholder with read-and-review visibility into assigned projects, progress, and reports.
+· Platform Admin — SITE-SYNC operator. Manages tenants, escalation, platform-level configuration. Not a company role.
 
-**Company Admin** — registers and configures the company, manages workers, projects, sites, roles. Full authority within the company scope.
+Capabilities, not roles: Safety Officer, Leading Hand, Project Manager, First Aider, Management Contact are capability flags on a Worker, not first-class roles. They may be promoted only if field requirements demonstrate role-based permissions genuinely need them.
 
-**Project Manager** — manages assigned projects: sites, work areas, assets, tasks, QA review, reports. Authority scoped to assigned projects.
-
-**Supervisor** — day-to-day site operations: task assignment, attendance verification, QA sign-off, blocker resolution. Authority scoped to assigned sites.
-
-**Worker** — executes work: checks in via QR, views tasks, records progress, captures evidence, raises blockers. Authority scoped to own work and assigned tasks.
-
-**Subcontractor** — external worker belonging to a subcontractor company, enrolled in the host company's project. Authority same as Worker but flagged as external.
-
-**EPC / Client** — external stakeholder with read-and-review visibility into assigned projects, progress, and reports.
-
-### 3.2 Role-permission matrix
-
-| Capability | Platform Admin | Company Admin | Project Manager | Supervisor | Worker | Subcontractor | EPC/Client |
-|---|---|---|---|---|---|---|---|
-| Register company | ✓ | | | | | | |
-| Manage company config | | ✓ | | | | | |
-| Enrol/remove workers | | ✓ | ✓ | | | | |
-| Create project/site | | ✓ | ✓ | | | | |
-| Define assets/work areas | | ✓ | ✓ | | | | |
-| Assign tasks | | ✓ | ✓ | ✓ | | | |
-| Execute tasks (progress, evidence) | | | | | ✓ | ✓ | |
-| QR check-in/out | | | | | ✓ | ✓ | |
-| Verify attendance | | ✓ | ✓ | ✓ | | | |
-| Review QA | | ✓ | ✓ | ✓ | | | |
-| Raise blockers | | | | ✓ | ✓ | ✓ | |
-| Resolve blockers | | ✓ | ✓ | ✓ | | | |
-| View reports | | ✓ | ✓ | ✓ | own | own | ✓ |
-| Export reports | | ✓ | ✓ | | | | |
-| View audit trail | | ✓ | ✓ | ✓ | own | own | |
-
-### 3.3 Authority rules
-
-1. Authority is granted per scope: platform, company, project, site, or self.
-2. Authority cannot exceed the grantor's own authority.
-3. Authority revocation is immediate and audited.
-4. Every F record carries the authority scope under which it was written.
-5. Self-authority extends only to the worker's own attendance, task execution, evidence, and blocker raising.
-6. Cross-entity operations (anything affecting another worker, another company, or project-level state) require the appropriate scope authority.
+Permissions are evaluated as role × scope × membership.
 
 ---
 
-## 4. Core entities
+§3 — Complete lifecycle
 
-### 4.1 Entity catalogue
+1. Install — app installed, no account.
+2. Company registration — registrant becomes Company Admin.
+3. Company setup — profile, branding, required documents, induction templates, project defaults.
+4. Project creation — Company Admin creates a project, site, EPC/client association.
+5. Worker invitation — worker invited to company (and optionally a project).
+6. Worker registration — worker creates an account.
+7. Company join — worker associated with the company; profile begins.
+8. Document collection — worker uploads required documents, licences, tickets.
+9. Company induction — worker completes company-level induction.
+10. SWMS / document acknowledgement — worker reads and signs required documents.
+11. Project assignment — worker assigned to one or more projects.
+12. Project induction — worker completes site/project-specific induction.
+13. Site readiness — all gates pass; worker cleared to sign in.
+14. Daily operations — pre-start, tasks, evidence, blockers, communication.
+15. Attendance — QR sign-in/out, breaks, crew attendance, timesheets.
+16. Offline operation — all of the above function without connectivity.
+17. Sync — queued actions reconcile with the server.
+18. Reporting — attendance, progress, QA, blockers, documents, exports.
+19. Renewal — expiring documents and inductions trigger re-verification.
+20. Offboarding — worker leaves company or project; access revoked; history retained.
 
-**Company** — a tenant. Has name, registration details, configuration, workers, projects. Companies are isolated; cross-company visibility requires explicit EPC/client grants.
-
-**Worker** — a person enrolled in a company. Has identity, role, skills, induction status, device registration. A worker may be a direct employee or a subcontractor.
-
-**Project** — a container of sites. Has name, client, timeline, status, assigned managers.
-
-**Site** — a physical location within a project. Has geofence, address, supervisors, work areas, assets, daily state.
-
-**Asset** — a physical construction element (pile, footing, column, beam, slab, pipe segment, valve, etc.). Has type, geometry (point/line/polygon), lifecycle state, progress, QA status, blockers. Assets are the primary unit of work tracking.
-
-**WorkArea** — a spatial grouping of assets within a site. Has geometry, name, assigned crews. Work areas enable map-based navigation and filtering.
-
-**Task** — a unit of work assigned to a worker or crew against assets or work areas. Has type, description, status, priority, due date, evidence requirements.
-
-**Shift** — a scheduled work period for a site. Has start/end time, assigned workers, actual attendance.
-
-**AttendanceRecord** — a QR-verified check-in or check-out event. Has worker, site, timestamp, QR code reference, geolocation.
-
-**Timesheet** — a derived aggregation of attendance records for a worker over a period. Has hours, approval state, supervisor sign-off.
-
-**QARecord** — a quality assurance observation against an asset or task. Has type (inspection, test, defect), status, evidence, resolution.
-
-**Evidence** — a photo, video, or document attached to a fact. Has capture timestamp, uploader, hash, linkage to the fact it evidences.
-
-**Blocker** — an impediment to work on an asset or task. Has type, description, severity, status, resolution, raised-by, resolved-by.
-
-**Crew** — a named group of workers assigned to a site or work area. Has members, supervisor.
-
-**Invitation** — a pending enrolment of a worker into a company. Has email/phone, role, status, expiry.
-
-**Report** — a derived read model aggregating facts for a scope and period. Has type, scope, filters, freshness, export format.
-
-### 4.2 Entity relationships
-
-Company 1→N Project. Project 1→N Site. Site 1→N WorkArea. WorkArea 1→N Asset. Site 1→N Shift. Worker N→N Site (via assignment). Worker N→N Crew. Task → Asset or WorkArea. AttendanceRecord → Worker + Site + Shift. QARecord → Asset or Task. Evidence → any fact. Blocker → Asset or Task. Report → scope (Company/Project/Site/WorkArea).
-
-### 4.3 Lifecycle states
-
-**Company**: active, suspended, archived.
-**Worker**: invited, inducted, active, suspended, retired.
-**Project**: draft, active, completed, archived.
-**Site**: draft, active, completed, archived.
-**Asset**: planned, in-progress, complete, verified, defect, retired.
-**Task**: draft, assigned, in-progress, complete, verified, cancelled.
-**Shift**: scheduled, active, completed, cancelled.
-**AttendanceRecord**: checked-in, checked-out.
-**Timesheet**: draft, submitted, approved, rejected.
-**QARecord**: open, in-review, resolved, closed.
-**Blocker**: open, acknowledged, in-progress, resolved, closed.
-**Invitation**: pending, accepted, expired, revoked.
-**Report**: generated, exported, archived.
-
-### 4.4 Deletion and retirement
-
-No entity is deleted. Entities transition to retired or archived states. All facts remain in the audit trail. Archived entities are excluded from default views but remain queryable and reportable when explicitly requested.
+Steps 6–13 are the onboarding/induction vertical (M1).
 
 ---
 
-## 5. Fact model
+§4 — Onboarding, induction, and readiness
 
-### 5.1 What is a fact
+4.1 Two-level model
 
-A fact (F record) is an immutable, timestamped, actor-attributed statement about the state of the world. Facts are the only mechanism by which state changes. Every mutation in the system — creating an entity, changing a status, recording attendance, capturing evidence, resolving a blocker — is a fact.
+```text
+COMPANY READINESS  +  PROJECT/SITE READINESS  →  SITE READINESS  →  ELIGIBLE FOR SITE OPERATIONS
+```
 
-### 5.2 Fact anatomy
+A worker may be: a valid user but not company-ready · company-ready but not project-ready · assigned but not site-ready · site-ready for Site A but not Site B.
 
-Every fact has:
-- **fact_id**: globally unique identifier (UUIDv7 for temporal ordering).
-- **fact_type**: the kind of state change (e.g., AssetCreated, TaskAssigned, AttendanceCheckedIn, QARecordOpened, BlockerResolved).
-- **entity_type** + **entity_id**: the entity this fact concerns.
-- **actor_id**: who recorded this fact.
-- **authority_scope**: the scope under which the actor had authority.
-- **timestamp**: when the fact was recorded (device time for offline, server time on sync).
-- **payload**: the fact-specific data (structured, schema-versioned).
-- **evidence_refs**: zero or more references to Evidence records.
-- **supersedes**: optional reference to a prior fact this one replaces.
-- **device_id**: the device on which this fact was recorded.
-- **sync_state**: pending, confirmed, conflicted, rejected.
+4.2 Requirement
 
-### 5.3 Fact types (complete enumeration)
+Onboarding is not a single state machine. It is a set of Requirements, each with its own type and lifecycle.
 
-**Company**: CompanyRegistered, CompanyConfigured, CompanySuspended, CompanyArchived.
-**Worker**: WorkerInvited, WorkerInducted, WorkerActivated, WorkerSuspended, WorkerRetired, WorkerRoleChanged, WorkerDeviceRegistered, WorkerDeviceRevoked.
-**Project**: ProjectCreated, ProjectConfigured, ProjectActivated, ProjectCompleted, ProjectArchived, ProjectManagerAssigned.
-**Site**: SiteCreated, SiteConfigured, SiteActivated, SiteCompleted, SiteArchived, SiteSupervisorAssigned, SiteGeofenceUpdated.
-**WorkArea**: WorkAreaCreated, WorkAreaConfigured, WorkAreaArchived.
-**Asset**: AssetCreated, AssetGeometryUpdated, AssetLifecycleChanged, AssetProgressUpdated, AssetQaStatusChanged, AssetRetired.
-**Task**: TaskCreated, TaskAssigned, TaskStarted, TaskProgressUpdated, TaskCompleted, TaskVerified, TaskCancelled, TaskEvidenceRequired.
-**Shift**: ShiftScheduled, ShiftActivated, ShiftCompleted, ShiftCancelled, ShiftWorkerAssigned.
-**Attendance**: AttendanceCheckedIn, AttendanceCheckedOut, AttendanceVerified, AttendanceFlagged.
-**Timesheet**: TimesheetGenerated, TimesheetSubmitted, TimesheetApproved, TimesheetRejected.
-**QA**: QARecordOpened, QARecordEvidenceAttached, QARecordInReview, QARecordResolved, QARecordClosed.
-**Evidence**: EvidenceCaptured, EvidenceAttached, EvidenceVerified, EvidenceFlagged.
-**Blocker**: BlockerRaised, BlockerAcknowledged, BlockerInProgress, BlockerResolved, BlockerClosed.
-**Crew**: CrewCreated, CrewMemberAdded, CrewMemberRemoved, CrewDissolved.
-**Report**: ReportGenerated, ReportExported.
-**Sync**: SyncStarted, SyncCompleted, SyncConflictDetected, SyncConflictResolved.
-**Audit**: AuditTrailAccessed, AuditTrailExported.
+Attribute Values
+scope company · project · site
+applies_to all_workers · role · named_workers
+type document · induction · acknowledgement
+requires_verification true · false
+expiry none · fixed_date · duration_from_satisfaction
+revision tracked; a new revision supersedes prior satisfaction
 
-### 5.4 Fact immutability
+Satisfaction is the record of a specific worker against a specific requirement.
 
-Facts are immutable once recorded. A fact may be superseded by a later fact, but the original remains in the audit trail. A fact may be marked as rejected during sync conflict resolution, but it is never deleted. The audit trail is append-only.
+4.3 Three requirement lifecycles
 
-### 5.5 Fact authority
+Document (licences, tickets, qualifications, uploaded evidence, permits)
 
-Every fact carries the authority scope under which it was recorded. The authority scope determines:
-- Whether the fact is valid (the actor must have had the required authority at the time of recording).
-- Whether the fact can be synced (offline facts recorded under valid authority are accepted; facts recorded under invalid or expired authority are flagged).
-- Whether the fact is visible to other actors (visibility follows authority scope).
+```text
+missing → uploaded → under_review → verified | rejected
+                                   → expiring_soon → expired → (renewal → uploaded)
+```
 
----
+Documents have administrative verification when requires_verification = true. Self-declared documents move uploaded → verified.
 
-## 6. Product surface
+Induction (company induction, site induction)
 
-### 6.1 Platform map
+```text
+not_started → in_progress → completed → expired | superseded
+```
 
-SITE-SYNC has three surfaces:
+Completed, not verified. expired by time. superseded by revision.
 
-1. **Android app** (primary): the worker and supervisor operational surface. Offline-first. Local SQLite database. QR scanning, camera, GPS, map view, task list, evidence capture, blocker raising, attendance, timesheet view.
+Acknowledgement (SWMS, safety policy, site rules)
 
-2. **Web dashboard** (secondary): the company admin, project manager, and EPC/client surface. Requires connectivity. Company management, project/site configuration, asset definition, map management, reports, audit trail, worker management, analytics.
+```text
+required → presented → acknowledged → superseded | expired
+```
 
-3. **Server** (backend): the authoritative store, sync engine, and API. PostgreSQL database. REST + WebSocket API. Report generation, audit trail aggregation, conflict resolution.
+Signed, not verified. presented and acknowledged are distinct auditable facts.
 
-### 6.2 Android app modules
+4.4 Readiness is derived, not chained
 
-**Auth module**: login, device registration, biometric unlock, session management.
-**Sync module**: offline queue, sync engine, conflict detection, background sync.
-**Map module**: site map, asset rendering, work area display, geolocation, geofence detection.
-**Task module**: task list, task detail, progress update, evidence capture, completion.
-**Attendance module**: QR scan, check-in/out, attendance history, timesheet view.
-**QA module**: QA record creation, evidence attachment, review, resolution.
-**Blocker module**: blocker raising, status tracking, resolution.
-**Evidence module**: camera capture, gallery selection, hash computation, attachment.
-**Report module**: report viewing (cached), freshness display.
-**Settings module**: profile, device management, sync settings, about.
+```text
+company_ready(worker) :=
+    profile_complete(worker)
+    AND ∀ requirement R where R.scope = company AND applies(R, worker):
+            satisfied(worker, R)
 
-### 6.3 Web dashboard modules
+site_ready(worker, site) :=
+    company_ready(worker)
+    AND ∀ requirement R where R.scope ∈ {project(site), site} AND applies(R, worker):
+            satisfied(worker, R)
+```
 
-**Company module**: registration, configuration, worker management, role management, invitations.
-**Project module**: project creation, site management, work area definition, asset definition, map management.
-**Operations module**: task management, attendance overview, timesheet approval, QA review, blocker management.
-**Report module**: report generation, filtering, export, scheduling (v2).
-**Audit module**: audit trail query, export, fact inspection.
-**Analytics module**: dashboards, KPIs, trend analysis (v2).
+Linear state chains are convenience summaries for UI and gating — never the stored truth.
 
-### 6.4 API surface
+4.5 Site readiness gate
 
-REST API for CRUD operations on all entities. WebSocket for real-time sync notifications. GraphQL for complex queries (v2). Webhook for external integrations (v2).
+A worker may sign in to a site only if site_ready(worker, site) holds and no applicable requirement is expired or rejected. Every block returns the specific failing requirement(s) — never a generic error.
 
----
+4.6 Renewal and supersession
 
-## 7. Offline and sync model
+· expiring_soon triggers worker notification at configured threshold.
+· expired removes site_ready and blocks new sign-ins.
+· Renewal re-enters only that requirement at uploaded (document) or not_started (induction).
+· A new requirement revision supersedes prior satisfaction without resetting unrelated requirements.
 
-### 7.1 Offline-first principle
+4.7 Invariants
 
-The Android app operates fully offline for all daily operations. A worker can check in, view tasks, update progress, capture evidence, raise blockers, and view their own timesheet without any connectivity. All operations are recorded as facts in the local SQLite database and queued for sync.
+· INV-1 — No worker is site_ready without all applicable company, project, and site requirements satisfied.
+· INV-2 — No sign-in for a worker with any applicable requirement expired or rejected.
+· INV-3 — Every satisfaction, verification, acknowledgement, expiry, and supersession is attributed and auditable.
+· INV-4 — Readiness state is reconstructible from the audit trail alone.
+· INV-5 — Offline requirement actions are durable and reconcile without silent loss.
+· INV-6 — Readiness is derived from requirements; no requirement's lifecycle is forced into another's.
 
-### 7.2 What requires connectivity
+4.8 Open decisions
 
-- Initial login and device registration.
-- Company registration and configuration (web dashboard).
-- Worker invitation and induction (web dashboard or admin-initiated).
-- Project and site creation (web dashboard).
-- Asset and work area definition (web dashboard).
-- Cross-entity report generation (web dashboard).
-- Report export (web dashboard).
-- Audit trail query (web dashboard).
-- Administrative document verification.
-- Platform administration.
-
-### 7.3 Sync protocol
-
-Sync is bidirectional and deterministic. The client sends pending facts to the server. The server validates authority, checks for conflicts, and either confirms or rejects each fact. The server sends new facts to the client. The client applies confirmed facts to its local database.
-
-### 7.4 Conflict resolution
-
-Conflicts occur when two facts from different sources attempt to mutate the same entity state. Resolution rules:
-
-1. **Last-writer-wins** for non-authoritative fields (e.g., progress percentage, notes).
-2. **Authority-wins** for authoritative fields (e.g., lifecycle state, QA status). The fact recorded under higher authority scope prevails.
-3. **Server-wins** for server-initiated state changes (e.g., worker suspension, authority revocation).
-4. **Manual resolution** for ambiguous conflicts. The conflict is flagged and presented to the appropriate authority for resolution.
-
-### 7.5 Sync ordering
-
-Facts are ordered by timestamp within a device. Across devices, facts are ordered by server receipt time. Causal ordering is preserved via the `supersedes` chain. The sync engine ensures that a fact is never applied before its predecessor.
-
-### 7.6 Data freshness
-
-Every read model (derived state) carries a freshness indicator: the timestamp of the last fact applied to it. Reports display freshness prominently. Cached data is always marked as potentially stale.
+· requires_verification per-requirement or per-type default. Draft: per-requirement, with type defaults.
+· Requirement revisions as versioned documents or timestamped records. Draft: timestamped records.
+· Project induction at project scope when a project has one site. Draft: always site scope, even single-site.
 
 ---
 
-## 8. Map operating surface
+§5 — Definition of Done
 
-### 8.1 Map as primary interface
+5.1 DoD — Task
 
-The map is the primary interface for site operations. Assets and work areas are rendered on a satellite or plan-view map. Workers navigate to their assigned work areas, tap assets to view details, update progress, capture evidence, and raise blockers.
+Implemented against an acceptance test that existed before implementation. Test passes. No regressions. Evidence attached.
 
-### 8.2 Map data model
+5.2 DoD — Feature
 
-Sites have a base map (satellite imagery or uploaded plan). Assets have geometry (point, line, or polygon) in the site's coordinate reference system. Work areas have polygon geometry. The map supports zoom, pan, layer toggling, and asset filtering.
+All task DoDs met. Offline behaviour specified and verified (or explicitly marked online-only with justification). Error and empty states implemented. Audit events emitted where the feature mutates state. Adversarial audit completed.
 
-### 8.3 Offline map
+5.3 DoD — Milestone
 
-Map tiles and asset geometry are cached locally for offline use. The cache is populated during connectivity and refreshed on sync. Workers can navigate the map, view assets, and perform all operations offline.
+All features complete. End-to-end acceptance tests pass. Offline/sync reconciliation verified for every state mutation. Evidence bundle produced. Salvage register updated. Next milestone execution contract drafted.
 
-### 8.4 Geofencing
+5.4 DoD — Release
 
-Sites have a geofence (polygon or radius). The app detects when a worker enters or exits the geofence. Check-in is only possible within the geofence (configurable per site). Geofence violations are flagged.
+All milestones complete. Android field validation passed on real devices, real connectivity. Security and tenant-isolation review passed. Data model and API contracts frozen. Rollback plan documented and rehearsed.
 
----
+5.5 Product invariants gating all DoD layers
 
-## 9. QR attendance
-
-### 9.1 QR check-in flow
-
-1. Worker opens the app and navigates to the attendance screen.
-2. Worker scans the site QR code (displayed at the site entrance or on a supervisor's device).
-3. App validates the QR code (site ID, timestamp, signature).
-4. App records an AttendanceCheckedIn fact with worker ID, site ID, timestamp, geolocation, and QR reference.
-5. Fact is queued for sync.
-
-### 9.2 QR check-out flow
-
-Same as check-in but records AttendanceCheckedOut. Check-out is optional; a worker who does not check out is automatically checked out at shift end (configurable per site).
-
-### 9.3 QR code generation
-
-QR codes are generated by the server and are time-limited (configurable, default 15 minutes). Each QR code encodes: site ID, timestamp, nonce, and HMAC signature. QR codes cannot be replayed.
-
-### 9.4 Attendance verification
-
-Supervisors can verify attendance records. Verification is a fact (AttendanceVerified). Flagged attendance (geofence violation, duplicate check-in, missing check-out) requires supervisor review.
+· INV-A — Every user-visible action has a defined offline behaviour.
+· INV-B — Every state mutation is auditable.
+· INV-C — No feature ships without a test that predates its implementation.
+· INV-D — Existing code enters only via the salvage register, citing a blueprint requirement and a test.
+· INV-E — Tenant data isolation is verified, not assumed.
 
 ---
 
-## 10. Reporting
+§6.1 — Projects & Sites
 
-### 10.1 Report types
+6.1.1 Invariants
 
-**Progress report**: asset progress by work area, site, or project. Shows completion percentage, evidence count, QA status, blockers.
-**Attendance report**: worker attendance by site, shift, or period. Shows check-in/out times, hours, verification status, flags.
-**Timesheet report**: worker timesheets by period. Shows hours, approval status, supervisor sign-off.
-**QA report**: QA records by asset, task, or site. Shows open items, resolution rate, defect trends.
-**Blocker report**: blockers by site, severity, or status. Shows resolution time, escalation rate.
-**Audit report**: fact trail for any entity, actor, or period. Shows all state changes with actor, timestamp, and evidence.
+· PS-INV-1 — Containment. Every Site belongs to exactly one Project. Every Project belongs to exactly one Company. No Site exists without a Project.
+· PS-INV-2 — Non-empty. Every active Project has at least one Site. A Project with zero Sites may exist only in draft.
+· PS-INV-3 — Assignment is explicit. A worker's presence on a Project is distinct from presence on a Site. Neither is inferred from the other.
+· PS-INV-4 — Readiness is per-site. A worker's site readiness is always computed against a specific Site. There is no "project-ready" implying "site-ready".
+· PS-INV-5 — Historical immutability. Attendance, evidence, QA records, and audit events recorded against a Site remain attached to that Site even after suspension, closure, or archival.
+· PS-INV-6 — External parties are first-class. EPC/client and subcontractor relationships are entities, not free-text fields.
+· PS-INV-7 — Handover is a state transition, not an export. Handover produces a permanent auditable record and freezes certain operational mutations.
+· PS-INV-8 — Lifecycle transitions are attributed and auditable.
+· PS-INV-9 — Site requirements are scoped to sites.
 
-### 10.2 Report generation
+6.1.2 Operational requirements
 
-Reports are generated on the server from the fact store. Report generation requires connectivity and appropriate authority. Reports are cached for session-only viewing.
+Company → Project → Site. A Site cannot be reassigned to a different Project. A Project's Sites are visible at the Project level; operations are Site-scoped.
 
-### 10.3 Report export
+External parties. EPC/client and subcontractor are Company-scoped ExternalParty records, referenced per Project. Not Companies in SITE-SYNC.
 
-Reports can be exported as CSV or PDF. Export is a fact (ReportExported) with actor, timestamp, format, and scope. Exported reports are immutable snapshots.
+Assignment. ProjectAssignment grants visibility/eligibility; SiteAssignment places a worker on a Site. Assignment states: assigned, active, paused, removed.
 
-### 10.4 Report freshness
+Permissions. Evaluated as role × scope × project/site membership. Not stored as a single access level.
 
-Every report displays its freshness: the timestamp of the last fact included. Reports generated over stale data are marked accordingly. Cross-entity reports require the latest sync state.
+6.1.3 Product behaviour
 
----
+Project lifecycle
 
-## 11. Audit and evidence
+```text
+draft → active → suspended → active (resumed)
+                → completed → archived
+draft → cancelled
+```
 
-### 11.1 Audit trail
+Site lifecycle
 
-The audit trail is the complete, append-only sequence of facts. It is queryable by entity, actor, fact type, date range, and authority scope. The audit trail is the ultimate source of truth.
+```text
+planned → mobilising → active → demobilising → closed → archived
+```
 
-### 11.2 Evidence chain
+Suspension. A suspended Site blocks new sign-ins immediately. Workers with in-progress shifts are not forcibly signed out. In-progress QA and evidence continue. Unsuspending returns to prior state.
 
-Evidence (photos, videos, documents) is captured on device, hashed (SHA-256), and attached to facts. The evidence hash is stored in the fact payload. Evidence integrity is verifiable: the hash of the stored file must match the hash in the fact.
+Closure. Sign-in rejected with reason "Site closed." Closure marks assignments removed with reason "site closure."
 
-### 11.3 Immutability guarantee
+Transfer. Platform Admin may transfer a Project between Companies. Transfer creates a new Project record with a new identity; copies Sites, requirements, active assignments; does not copy historical attendance/evidence/QA — those remain with the original Project. Records a TransferEvent referencing both.
 
-Facts and evidence are immutable. Any attempt to modify a fact or evidence file is detectable via hash mismatch. The audit trail itself is append-only and tamper-evident.
+Site-level transfer is not permitted.
 
----
+Handover. Freezes a defined set of data as of a timestamp; produces a permanent handover record; does not prevent later operational activity.
 
-## 12. Architecture overview
+Multi-site projects. Requirements may be scoped Company / Project / Site. A worker may be site-ready at one Site and not another within the same Project. Reporting aggregates but always allows drill-down.
 
-### 12.1 System components
+Readiness interaction. Site readiness is derived from requirements scoped to the Site, its parent Project, and the parent Company. A Project-level requirement applies to all its Sites unless explicitly opted out at Site scope. Default: apply.
 
-- **Android app**: Kotlin, Jetpack Compose, Room (SQLite), Hilt (DI), CameraX, ML Kit (QR), MapLibre (map), WorkManager (background sync).
-- **Web dashboard**: React, TypeScript, Tailwind CSS, MapLibre GL, Recharts.
-- **Server**: Node.js, Hono, Drizzle ORM, PostgreSQL, WebSocket (ws), Redis (pub/sub for real-time).
-- **Infrastructure**: Docker, GitHub Actions (CI/CD), Cloudflare (CDN, R2 for evidence storage).
+6.1.4 Conceptual model
 
-### 12.2 Data stores
+Source-of-truth entities: Company, Project, Site, ExternalParty, ProjectExternalParty, ProjectAssignment, SiteAssignment, Requirement, HandoverRecord, TransferEvent, LifecycleEvent.
 
-- **PostgreSQL** (server): authoritative fact store, entity state, audit trail.
-- **SQLite** (Android): local fact store, entity state, offline queue, cached read models.
-- **R2 / S3** (cloud): evidence file storage (photos, videos, documents).
-- **Redis** (server): pub/sub for real-time sync notifications, session cache.
+Derived: Project's active workers, Site readiness gate, Project operational status summary, Worker project visibility.
 
-### 12.3 API architecture
+No derived entity is authoritative.
 
-REST API for CRUD. WebSocket for real-time sync. All API calls are authenticated (JWT) and authorized (scope-based). Rate limiting and input validation at the API layer.
+6.1.5 Failure and recovery
 
-### 12.4 Sync architecture
+Site created against wrong Project cannot be moved — closed and recreated. Transfer of an active Project is rejected; Sites must be suspended first. Handover records are not invalidated by later state changes. Site closure with open shifts is blocked until shifts are closed or force-closed with reason.
 
-The sync engine runs on both client and server. Client-side: WorkManager-scheduled background sync, manual sync trigger, conflict detection. Server-side: fact validation, authority checking, conflict resolution, broadcast to connected clients.
+6.1.6 Audit requirements
 
----
+Project and Site lifecycle events; TransferEvent; assignment state changes; ExternalParty changes; Requirement changes; HandoverRecord. All carry actor, timestamp, reason where applicable.
 
-## 13. Security model
+6.1.7 Acceptance criteria
 
-### 13.1 Authentication
+AC-PS-1 through AC-PS-7.
 
-JWT-based authentication. Access tokens are short-lived (15 minutes). Refresh tokens are long-lived (30 days) and device-bound. Biometric unlock for the Android app (local only, not server-verified).
+6.1.8 Open decisions
 
-### 13.2 Authorization
-
-Scope-based authorization. Every API call and every fact carries the actor's authority scope. The server validates authority for every operation. Authority is checked at the fact level, not just the API level.
-
-### 13.3 Data encryption
-
-TLS for all network communication. At-rest encryption for PostgreSQL (managed by hosting provider). Evidence files are encrypted at rest in R2/S3. Local SQLite database is encrypted (SQLCipher) on Android.
-
-### 13.4 Audit security
-
-The audit trail is append-only. No API or database operation can modify or delete facts. Audit trail access requires appropriate authority. Audit trail export is a fact.
+ExternalParty sharing across Companies. Joint ventures (draft: no). Handover per-site vs per-project. Suspension retroactivity. Archival as distinct state vs flag.
 
 ---
 
-## 14. Non-functional requirements
+§6.2 — Map / Site Operating Surface
 
-### 14.1 Performance
+6.2.1 Invariants
 
-- App cold start: < 3 seconds on mid-range Android device.
-- Map render: < 1 second for 1000 assets.
-- Sync: < 5 seconds for 100 facts on 3G.
-- Report generation: < 10 seconds for 10,000 facts.
-- API response: < 200ms p95 for CRUD operations.
+· MAP-INV-1 — Site-scoped. Every asset belongs to exactly one Site.
+· MAP-INV-2 — Stable identity. Asset identity stable across position, geometry, name changes.
+· MAP-INV-3 — Geometry is captured, not corrected. Never silently corrected; re-survey is a new event referencing prior geometry.
+· MAP-INV-4 — Asset registration is structural. Requires connectivity in v1.
+· MAP-INV-5 — Asset state is derived, not stored.
+· MAP-INV-6 — The map view is derived.
+· MAP-INV-7 — Worker location context is an explicit fact. Selected asset / Site-wide / unknown. Never inferred silently from GPS.
+· MAP-INV-8 — Field actions are offline-capable on cached assets.
+· MAP-INV-9 — Asset lifecycle is attributed and auditable.
+· MAP-INV-10 — Asset deletion is soft.
+· MAP-INV-11 — Site closure does not invalidate assets.
+· MAP-INV-12 — Asset taxonomy is extensible but typed. New types require blueprint amendment.
 
-### 14.2 Scalability
+6.2.2 Operational requirements
 
-- Support 10,000 workers per company.
-- Support 1,000 sites per project.
-- Support 100,000 assets per site.
-- Support 1M facts per company per month.
-- Horizontal scaling for the server (stateless API, shared database).
+Operating surface provides spatial view, list view, asset selection, aggregate Site state, worker position.
 
-### 14.3 Reliability
+Asset hierarchy
 
-- 99.9% uptime for the server.
-- Zero data loss for confirmed facts.
-- Offline operation for 7 days without sync.
-- Automatic retry for failed sync.
+```text
+Company → Project → Site → WorkArea (optional) → Asset
+```
 
-### 14.4 Usability
+Taxonomy (v1): PILE, FOOTING, COLUMN, SPAN, AREA, POINT, LINE. Type determines geometry class. Type is immutable after creation.
 
-- Android app usable with gloves (large touch targets).
-- Android app usable in bright sunlight (high contrast).
-- Web dashboard usable on tablet.
-- Accessibility: WCAG 2.1 AA for web dashboard.
+Tracker deferred (ambiguous term; see open decisions).
 
----
+Geometry: Point (lat/lon, optional altitude, accuracy radius), Line (vertices), Area (closed vertices). Captured at registration by GPS, manual placement, or import (deferred). Immutable as fact; re-survey appends.
 
-## 15. Constraints
+Worker location context: selected asset / Site-wide / unknown. GPS may suggest, not set.
 
-### 15.1 Technical constraints
+Map interaction: pan, zoom, select by tap, filter by type, filter by derived state, locate self, view assigned asset. Multi-select deferred.
 
-- Android API 26+ (Android 8.0+).
-- No Google Play Services dependency for core functionality (QR scanning, map, camera).
-- SQLite for local storage (Room ORM).
-- PostgreSQL 15+ for server.
-- Node.js 20+ for server runtime.
+Field actions: view derived state, capture evidence, raise QA, raise blocker, task actions, view history. None mutate the asset.
 
-### 15.2 Business constraints
+6.2.3 Product behaviour
 
-- Multi-tenant from day one. No single-tenant shortcuts.
-- Offline-first is non-negotiable. No feature may require connectivity unless explicitly listed in §7.2.
-- Audit trail is non-negotiable. No state change without a fact.
-- Evidence integrity is non-negotiable. All evidence is hashed and verifiable.
+Asset lifecycle
 
-### 15.3 Regulatory constraints
+```text
+registered → active → retired
+                    → re-surveyed (identity persists)
+active → suspended → active
+any → archived (terminal)
+```
 
-- GDPR: worker data is personal data. Right to access, right to erasure (within audit constraints), data portability.
-- Local labour laws: attendance records may be required for payroll compliance. Retention periods vary by jurisdiction.
-- Construction industry standards: QA records may be subject to regulatory inspection.
+GPS semantics — three distinct facts: (1) asset geometry — captured once or re-surveyed; (2) evidence location — captured at moment of capture; (3) worker live location — ephemeral, not persisted as fact. "Locate me" uses (3) for display only.
 
----
+Offline-capable: view cached assets, select assets, view cached derived state, capture evidence, raise QA/blocker, task actions, locate me.
 
-## 16. Glossary
+Connectivity-required: register asset, re-survey geometry, retire/suspend/archive asset, import geometry, view uncached assets, cross-Site views.
 
-**Fact (F record)**: an immutable, timestamped, actor-attributed statement about a state change.
-**Entity (E)**: a domain object (Company, Worker, Project, Site, Asset, etc.).
-**Derived (D)**: a read model computed from facts (timesheet, progress report, site daily state).
-**Asset**: a physical construction element tracked on the map.
-**WorkArea**: a spatial grouping of assets within a site.
-**Authority scope**: the level at which an actor has permission to record facts (platform, company, project, site, self).
-**Sync**: the bidirectional exchange of facts between client and server.
-**Freshness**: the timestamp of the last fact applied to a read model.
-**Geofence**: a virtual boundary around a site used for attendance validation.
-**QR code**: a time-limited, signed code used for attendance check-in/out.
-**Evidence**: a photo, video, or document attached to a fact, hashed for integrity.
-**Blocker**: an impediment to work that requires resolution.
-**Crew**: a named group of workers assigned to a site or work area.
-**Tenant**: a company using SITE-SYNC. Tenants are isolated.
-**Audit trail**: the complete, append-only sequence of facts.
+Cache freshness. Staleness indicated per asset ("last synced 2h ago"); stale data never presented as current.
 
----
+6.2.4 Conceptual model
 
-# PART B — ARCHITECTURE CONTRACT
+Source-of-truth: WorkArea, Asset, AssetGeometryEvent, AssetLifecycleEvent, AssetWorkAreaAssignment.
 
-## 17. Architecture principles
+Derived: current geometry, current lifecycle, current WorkArea membership, progress, QA state, blocker state, map render, list render.
 
-### AC-ARCH-1: Fact-sourced architecture
-All state is derived from facts. There is no mutable entity state outside the fact store. Read models are computed from facts and are disposable.
+6.2.5 Failure and recovery
 
-### AC-ARCH-2: Offline-first
-The Android app operates fully offline for all daily operations. Offline is the default, not the exception.
+GPS unavailable → registration blocked. GPS inaccurate → accuracy recorded, correction is re-survey. Wrong coordinates → re-survey supersedes. Offline registration → rejected locally. Asset archived → context downgrades to Site-wide. Stale cache → indicated. Retired asset action → rejected locally. Site switched → context cleared. Duplicate registration → applied once. GPS disagrees with geometry → both preserved.
 
-### AC-ARCH-3: Tenant isolation
-Companies are fully isolated. No cross-tenant data access without explicit grants.
+6.2.6 Audit requirements
 
-### AC-ARCH-4: Authority-scoped operations
-Every operation carries an authority scope. The scope determines validity, visibility, and sync acceptance.
+Every asset event records: asset identity, command identity, actor, device identity, device timestamp, server sync timestamp, event type, payload. Freshness presentation records asset identity, last confirmed sync, what is stale.
 
-### AC-ARCH-5: Immutable audit trail
-Facts are immutable and append-only. The audit trail is the ultimate source of truth.
+6.2.7 Acceptance criteria
 
-### AC-ARCH-6: Evidence integrity
-All evidence is hashed (SHA-256) at capture. Integrity is verifiable at any time.
+AC-MAP-1 through AC-MAP-14.
 
-### AC-ARCH-7: Deterministic sync
-The same set of facts always converges to the same state regardless of order of arrival.
+6.2.8 AC-04 reconciliation
 
-### AC-ARCH-8: Local-first read models
-The Android app computes read models locally from the local fact store. Server-computed read models are cached and marked with freshness.
+NOT PRESENT. No map/asset/geometry/GPS/spatial domain implementation in AC-04. Roadmap references only.
+
+6.2.9 Open decisions
+
+Tracker definition. WorkArea in v1 (draft: optional). Geometry import format. Map tile offline availability. GPS accuracy threshold. Multi-select. Asset naming conventions. Re-survey authority. Map rotation. Worker live location persistence (draft: no). Cross-Site asset reference (draft: no).
 
 ---
 
-## 18. Data architecture
+§6.3 — Workers & Crews
 
-### AC-DATA-1: Fact store schema
-The fact store is a single append-only table (or collection) with the schema defined in §5.2. Indexes on entity_id, actor_id, fact_type, timestamp, and sync_state.
+6.3.1 Invariants
 
-### AC-DATA-2: Entity state projection
-Entity state is a projection from the fact store. Projections are rebuilt on demand and cached. The cache is invalidated when new facts arrive.
+· WC-INV-1 — Person is Platform-scoped and stable.
+· WC-INV-2 — Worker is a Company-scoped membership. Has its own identity; does not replace Person.
+· WC-INV-3 — No duplicate human identity. One human is one Person.
+· WC-INV-4 — Assignment is explicit and tripartite. ProjectAssignment, SiteAssignment, CrewMembership are distinct. None implies another.
+· WC-INV-5 — Crew is Company-scoped and reusable. CrewSiteAssociation is separate and Site-scoped.
+· WC-INV-6 — Worker profile is derived from creation fact plus profile-change events.
+· WC-INV-7 — WorkerQrIdentity is identity-bearing and Company-scoped. At most one active per Worker. Offboarded or revoked Worker has zero. Rotation creates new identity, retires prior; Worker identity unchanged.
+· WC-INV-8 — Capabilities are flags, not roles.
+· WC-INV-9 — Deactivation is not deletion.
+· WC-INV-10 — QR is identity, not authorisation.
+· WC-INV-11 — Actor/subject distinction preserved.
+· WC-INV-12 — Communication identity is not authorisation.
+· WC-INV-13 — Worker lifecycle is derived.
 
-### AC-DATA-3: Local database schema
-The Android local database mirrors the server schema with additional tables for sync queue, conflict resolution, and cached read models.
+6.3.2 Operational requirements
 
-### AC-DATA-4: Evidence storage
-Evidence files are stored in object storage (R2/S3). The fact store contains only the evidence reference (URL, hash, metadata). Evidence files are immutable.
+Person → Worker. Person created at invitation creation (if invited by reference) or at invitation acceptance. Worker created at the registered transition. A Person may be a Worker in multiple Companies. Not two simultaneous memberships in the same Company.
 
-### AC-DATA-5: Schema versioning
-Fact payloads are schema-versioned. The sync engine handles version negotiation. Old clients can read new facts (forward-compatible). New clients can read old facts (backward-compatible).
+Invitation lifecycle
 
----
+```text
+pending → accepted → (Worker creation)
+        → cancelled
+        → expired
+```
 
-## 19. Sync architecture
+Worker lifecycle
 
-### AC-SYNC-1: Bidirectional sync
-Sync is bidirectional. The client sends pending facts. The server sends new facts. Both directions are atomic per batch.
+```text
+registered → active → suspended → active (resumed)
+                    → offboarded (terminal)
+```
 
-### AC-SYNC-2: Conflict detection
-The server detects conflicts by checking if a fact's supersedes chain is consistent with the server's current state. A conflict occurs when the supersedes reference is not the latest fact for the entity.
+Worker profile fields (Company-scoped): display name, contact phone, contact email, photo, capabilities, role label, management contact reference.
 
-### AC-SYNC-3: Conflict resolution
-Conflicts are resolved per §7.4. Resolved conflicts are recorded as SyncConflictResolved facts.
+Role label (Worker / Supervisor / Company Admin) is descriptive membership metadata. Never consulted for permission or capability evaluation.
 
-### AC-SYNC-4: Sync batching
-Facts are synced in batches (default 100). Batches are atomic: either all facts in a batch are applied or none are.
+Capabilities (Company-scoped, granted/revoked by Company Admin, attributed): supervisor, first_aider, management_contact (v1); others deferred.
 
-### AC-SYNC-5: Sync ordering
-Facts within a batch are ordered by timestamp. Batches are ordered by client sync sequence number. The server applies batches in order.
+Crew. Company-scoped E entity, reusable across Projects and Sites. Crew membership is a distinct relationship. CrewSiteAssociation is a separate Site-scoped relationship.
 
-### AC-SYNC-6: Sync retry
-Failed sync is retried with exponential backoff (1s, 2s, 4s, 8s, 16s, 32s, 64s, then every 5 minutes). Retry is automatic via WorkManager.
+Assignment model
 
-### AC-SYNC-7: Sync notification
-After sync, the server notifies connected clients via WebSocket. Clients invalidate affected read models.
+```text
+ProjectAssignment    Worker × Project
+SiteAssignment       Worker × Site
+CrewMembership       Worker × Crew (Company-scoped)
+CrewSiteAssociation  Crew × Site
+```
 
----
+WorkerQrIdentity. Company-scoped E entity. Encodes a reference to the QR identity; resolving yields the Worker. Rotation retires current and creates new. Revocation retires without replacement. At most one active per Worker.
 
-## 20. API architecture
+Communication. Contact fields are profile data. WhatsApp handoff is a UI affordance, not an integration.
 
-### AC-API-1: REST API
-All CRUD operations are REST. Resources are entities. Operations are standard HTTP methods. Responses are JSON.
+6.3.3 Product behaviour
 
-### AC-API-2: WebSocket API
-Real-time sync notifications use WebSocket. Clients subscribe to their company's channel. Notifications are fact-type-specific.
+Worker registration. Connectivity-required. Existing Person linked; new Worker identity created for the new Company.
 
-### AC-API-3: Authentication
-JWT access tokens (15-minute expiry) + refresh tokens (30-day expiry, device-bound). Token refresh is automatic.
+Worker activation. Automatic on registration unless Company Admin holds in registered state for review.
 
-### AC-API-4: Authorization
-Every API call is authorized against the actor's authority scope. Authorization is enforced at the API layer and at the fact layer.
+Assignment management. Created by Supervisor or Company Admin with authority. Removal is a state change, not deletion. A removed assignment is not reusable; a new assignment creates a new identity.
 
-### AC-API-5: Rate limiting
-API calls are rate-limited per actor and per company. Default: 100 requests/minute per actor, 1000 requests/minute per company.
+Site readiness interaction. Requires company readiness, all scoped requirements satisfied, and SiteAssignment (active or assigned). ProjectAssignment alone, CrewMembership alone, CrewSiteAssociation alone do not satisfy readiness.
 
-### AC-API-6: Input validation
-All API inputs are validated against JSON schemas. Invalid inputs return 400 with detailed error messages.
+Capability attribution. Grant/revoke attributed. Revocation does not retroactively invalidate prior actions.
 
----
+QR behaviour. Scanning resolves to Worker identity. Scanning does not itself record attendance, grant readiness, or authorise any action.
 
-## 21. Android architecture
+QR rotation race (deterministic). QR identity lifecycle: active → retired. Retirement is server-authoritative once accepted. Before retirement is server-authoritative: resolution proceeds. After: new resolution rejected with "QR retired." A scan that resolved before retirement carries the pre-retirement QR identity; the requested action's validity is determined by authorisation at the point of action, not by the QR's later state.
 
-### AC-AND-1: MVVM + Repository
-The Android app uses MVVM with Repository pattern. ViewModels expose StateFlow. Repositories mediate between local database and remote API.
+QR atomicity. Creation/rotation atomic with respect to at-most-one-active. Rotation is a single atomic operation (create new + retire prior). No observable two-active or zero (while QR-enabled and not offboarded). Enforced server-side. Concurrent rotations resolved by server ordering; loser rejected with reason.
 
-### AC-AND-2: Offline-first repository
-Repositories always read from the local database. Writes go to the local database and the sync queue. Sync is handled by the sync engine.
+Offline-capable: view own profile, cached crew memberships, cached SiteAssignments and readiness, present own QR, scan a cached Worker QR.
 
-### AC-AND-3: Room database
-Local storage uses Room (SQLite). Database is encrypted (SQLCipher). Migrations are tested.
+Connectivity-required: registration, invitation, assignment creation/pause/resume/removal, crew creation and membership, capability grant/revoke, QR rotation/revocation, lifecycle transitions.
 
-### AC-AND-4: WorkManager sync
-Background sync uses WorkManager. Sync runs on network availability, on app foreground, and on a periodic schedule (every 15 minutes when connected).
+Suspended Worker: cannot initiate new Worker actions; cannot be assigned new work; existing artifacts may be administered by authorised actors; open shifts continue until explicitly closed; Crew memberships retained; QR retained unless revoked.
 
-### AC-AND-5: CameraX evidence capture
-Evidence capture uses CameraX. Photos are compressed (JPEG, max 2MB), hashed (SHA-256), and stored locally before sync.
+Offboarded Worker: all assignments and memberships ended; CrewSiteAssociations unaffected; open shifts must be closed or force-closed with reason; pending tasks reassigned or cancelled; pending CompletionClaims preserved and remain verifiable; QR retired; historical facts preserved; Person preserved.
 
-### AC-AND-6: ML Kit QR scanning
-QR scanning uses ML Kit. Scanning is fast (< 500ms) and works offline.
+Pending CompletionClaims on offboarding. Preserved as immutable F records. Remain verifiable by authorised actors. May be rejected or reversed by normal authority. Cannot be withdrawn by the offboarded Worker; only a Company Admin may withdraw on their behalf with mandatory reason. Surfaced to Company Admin in the offboarding checklist; resolution not time-limited.
 
-### AC-AND-7: MapLibre map
-The map uses MapLibre GL Native. Map tiles are cached locally. Asset geometry is rendered as GeoJSON layers.
+Person continuity. A Person's Worker memberships across Companies are independent. Company A cannot see Company B's profile, contact, or activity.
 
----
+6.3.4 Conceptual model
 
-## 22. Web dashboard architecture
+Source-of-truth: Person (E, Platform), Worker (E, Company), WorkerProfileChange (F), WorkerLifecycleEvent (F), CapabilityGrant (F), ProjectAssignment (E), SiteAssignment (E), Crew (E, Company), CrewMembership (E, Company), CrewSiteAssociation (E, Site), WorkerQrIdentity (E, Company), WorkerQrIdentityEvent (F), Invitation (F).
 
-### AC-WEB-1: React SPA
-The web dashboard is a React single-page application. State management uses React Query + Zustand.
+Crew lifecycle: created → active → archived. Archival terminal; memberships and associations must be ended before archival. Archival attributed; history queryable.
 
-### AC-WEB-2: Server-side rendering (optional)
-SSR is not required for v1. The dashboard is behind authentication and does not need SEO.
+CrewSiteAssociation lifecycle: active → removed. Removal does not affect CrewMemberships or SiteAssignments.
 
-### AC-WEB-3: MapLibre GL JS
-The map uses MapLibre GL JS. Asset geometry is rendered as GeoJSON layers.
+Relationship-entity rule. A relationship is E if it has state independent of its endpoints; otherwise F or D.
 
-### AC-WEB-4: Real-time updates
-The dashboard subscribes to WebSocket notifications for real-time updates.
+Derived: current Worker lifecycle, current profile, current capabilities, current Crew memberships, current assignments, readiness, active QR identity, Crew members, Crew Site associations.
 
----
+6.3.5 Failure and recovery
 
-## 23. Server architecture
+Registration offline → rejected. Duplicate invitation → rejected. Duplicate registration → idempotent. Person exists elsewhere → linked, new Worker created. Assignment against non-cached Site → rejected. QR scan of non-cached Worker → rejected. Crew archival with active memberships → blocked. Offboarding with open shift → blocked. Suspended while on-shift → shift continues; next check-in blocked. Concurrent offboarding + verification → both preserved. QR rotation while old QR scanning → deterministic per §6.3.3.
 
-### AC-SRV-1: Hono framework
-The server uses Hono (Node.js). Hono is lightweight, fast, and TypeScript-native.
+6.3.6 Audit requirements
 
-### AC-SRV-2: Drizzle ORM
-Database access uses Drizzle ORM. Migrations are versioned and tested.
+Every Worker-lifecycle, assignment, capability, and QR event records: event identity, command identity, event type, subject, actor, device identity, device timestamp, server sync timestamp, reason (mandatory for suspension, offboarding, capability revocation, assignment removal, QR revocation), payload.
 
-### AC-SRV-3: PostgreSQL
-The primary database is PostgreSQL 15+. Connection pooling via pg-pool.
+6.3.7 Acceptance criteria
 
-### AC-SRV-4: Redis pub/sub
-Real-time notifications use Redis pub/sub. The server publishes fact notifications. WebSocket servers subscribe and forward to clients.
+AC-WC-1 through AC-WC-15.
 
-### AC-SRV-5: Horizontal scaling
-The server is stateless. Horizontal scaling is via load balancer + multiple instances. Redis is shared for pub/sub. PostgreSQL is shared for state.
+6.3.8 AC-04 reconciliation
 
----
+PARTIAL — extraction completed. No RETAIN. Results:
 
-## 24. Security architecture
+Artifact Disposition
+authService.ts REFERENCE — session boundary only
+identityService.ts REFERENCE — organisation-scoped, conflicts WC-INV-1/2
+projectContext.ts REFERENCE — no SiteAssignment
+deviceRegistrationService.ts FREEZE — pending §7 Device physical representation
+persons migration REFERENCE — organisation-scoped
+company_memberships REFERENCE — precursor, not Worker E
+project_assignments REFERENCE — no SiteAssignment, ACTIVE/INACTIVE only
+QR parser / validation / camera mechanics SALVAGE (mechanism only)
+QR identity model NEW
+QR rotation/revocation NEW
+Crew model NEW
+QR tests SALVAGE test mechanics only; INV-C requires new tests
 
-### AC-SEC-1: TLS everywhere
-All network communication uses TLS 1.3. Certificate pinning on Android (v2).
+Critical note: CompanyMembership is not renameable to Worker without silently preserving the organisation-scoped identity model. That leak is prohibited.
 
-### AC-SEC-2: JWT authentication
-Access tokens are JWT (RS256). Refresh tokens are opaque, device-bound, and revocable.
+6.3.9 Open decisions
 
-### AC-SEC-3: Scope-based authorization
-Authorization is scope-based. Scopes are: platform, company, project, site, self. Every operation is authorized against the required scope.
+Capability set (draft: supervisor, first_aider, management_contact). Multiple Crew memberships (draft: yes). CrewSiteAssociation authority. Emergency contact fields (draft: deferred). Photo storage. Person self-registration (draft: no). Cross-Company Person merge (draft: no). QR format (draft: opaque token). QR rotation trigger (draft: manual only). Worker reactivation (draft: new Worker identity). Crew archival semantics. Communication endpoints (draft: WhatsApp handoff only). Invitation delivery (draft: deferred).
 
-### AC-SEC-4: SQL injection prevention
-All database access uses parameterized queries via Drizzle ORM. No raw SQL.
-
-### AC-SEC-5: XSS prevention
-The web dashboard sanitizes all user input. React's built-in XSS protection is enabled.
-
-### AC-SEC-6: CSRF prevention
-API calls require JWT in the Authorization header (not cookies). CSRF is not applicable.
-
-### AC-SEC-7: Rate limiting
-API calls are rate-limited. Brute-force protection on authentication endpoints.
-
-### AC-SEC-8: Evidence integrity
-Evidence files are hashed (SHA-256) at capture. The hash is stored in the fact. Verification compares the stored file's hash with the fact's hash.
+CLOSED — Offboarding open-shift force-close authority: Company Admin only. Supervisor cannot. Reason mandatory. Produces AttendanceEvent type FORCE_CLOSE.
 
 ---
 
-## 25. Testing architecture
+§6.4 — Daily Operations / Pre-starts
 
-### AC-TEST-1: Unit tests
-All business logic has unit tests. Coverage target: 80% for domain logic, 60% overall.
+6.4.1 Invariants
 
-### AC-TEST-2: Integration tests
-API endpoints have integration tests. Database operations are tested against a test database.
+· DO-INV-1 — Pre-start is a Site-scoped daily event.
+· DO-INV-2 — Pre-start is a fact, not a state. Immutable once submitted; corrections are additive.
+· DO-INV-3 — Attendance at pre-start is explicit.
+· DO-INV-4 — Pre-start attendance is not shift attendance.
+· DO-INV-5 — Pre-start content is versioned and referenced.
+· DO-INV-6 — Acknowledgement at pre-start is a §4 acknowledgement with pre-start presenting context.
+· DO-INV-7 — Pre-start completion is derived.
+· DO-INV-8 — Pre-start is offline-capable for participants.
+· DO-INV-9 — Pre-start content definition is connectivity-required; acknowledgement is offline-capable if cached.
+· DO-INV-10 — Pre-start is attributable.
+· DO-INV-11 — Daily operations are not a second task system.
+· DO-INV-12 — Site readiness gates pre-start participation.
+· DO-INV-13 — Daily state is derived.
 
-### AC-TEST-3: E2E tests
-Critical user flows have E2E tests: login, check-in, task execution, evidence capture, sync, report viewing.
+6.4.2 Operational requirements
 
-### AC-TEST-4: Sync tests
-Sync conflict resolution has dedicated tests. Deterministic sync is verified by replaying fact sequences in different orders.
+Pre-start: Site (required), work date, presenter, content reference, participant list, acknowledgement set.
 
-### AC-TEST-5: Offline tests
-Offline operation is tested by disabling network and verifying all offline-capable operations.
+Content: versioned Site-scoped items — safety briefing, hazard notes, site-specific requirements, named acknowledgements, optional environmental notes. Each content set has a version identity. Revisions do not retroactively affect prior pre-starts.
 
----
+PreStartContent is a single E entity per Site. Revisions are immutable PreStartContentRevision F records. No second identity per revision.
 
-## 26. Deployment architecture
+Participant recording. Individually by Worker identity. Must be site_ready at time of recording. Offline recording validated locally against cached readiness; server revalidates on sync; a server rejection surfaces as a CommandOutcome and does not silently delete the recording.
 
-### AC-DEP-1: Docker containers
-All server components run in Docker containers. Docker Compose for local development. Kubernetes for production (v2).
+Presenter. Supervisor (capability), Company Admin, or Worker with supervisor capability.
 
-### AC-DEP-2: CI/CD
-GitHub Actions for CI/CD. Tests run on every PR. Deployment is automated on merge to main.
+Acknowledgements. §4.3 Acknowledgement with pre-start context. Offline-capable if cached. Duplicate for same content item / same work date / same Worker is idempotent.
 
-### AC-DEP-3: Database migrations
-Database migrations are versioned and run automatically on deployment. Rollback is supported.
+6.4.3 Product behaviour
 
-### AC-DEP-4: Evidence storage
-Evidence files are stored in Cloudflare R2 (or S3). CDN for fast access. Signed URLs for secure access.
+Authoritative model
 
----
+```text
+PreStart identity + creation fact + PreStartLifecycleEvent facts + PreStartCorrection facts
+= derived current condition
+```
 
-# PART C — ACCEPTANCE CRITERIA
+corrected is a derived predicate (≥1 PreStartCorrection referencing a closed PreStart), not a state.
 
-## 27. Acceptance criteria format
+Derived pre-start completion
 
-Each acceptance criterion has:
-- **ID**: unique identifier (AC-{module}-{number}).
-- **Given/When/Then**: the criterion in Gherkin format.
-- **Offline**: whether the criterion applies offline.
-- **Authority**: the required authority scope.
-- **Evidence**: the evidence required to verify the criterion.
+```text
+pre_start_complete(site, work_date) :=
+    ∃ closed PreStart for (site, work_date)
+    AND every required content item has ≥1 acknowledgement per participant
+    AND no participant is missing a required acknowledgement
+```
 
----
+Site configuration (C-class): pre_start_required_before_check_in (draft: default false), pre_start_content_required_for_all (draft: all), pre_start_presenter_min_capability (draft: supervisor).
 
-## 28. Company management acceptance criteria
+Offline-capable: present against cached content, record cached and site-ready participants, acknowledge cached content, view cached derived daily state.
 
-### AC-CO-1: Company registration
-Given a platform admin, when they register a new company with name and details, then the company is created with status active and a CompanyRegistered fact is recorded.
-Offline: No. Authority: Platform Admin. Evidence: Company record, fact trail.
+Connectivity-required: define/revise content, close pre-start server-side, corrections, cross-site queries, content library changes.
 
-### AC-CO-2: Company configuration
-Given a company admin, when they update company configuration, then the configuration is saved and a CompanyConfigured fact is recorded.
-Offline: No. Authority: Company Admin. Evidence: Updated configuration, fact trail.
+Corrections. PreStartCorrection is additive; does not mutate original participant list or acknowledgement set. Corrected views are derived.
 
-### AC-CO-3: Company suspension
-Given a platform admin, when they suspend a company, then all company operations are disabled and a CompanySuspended fact is recorded.
-Offline: No. Authority: Platform Admin. Evidence: Company status, fact trail.
+Conflict semantics. Participant recording additive; duplicate idempotent. Acknowledgement additive, idempotent per (worker, content item, work date). Closure: first accepted wins; second rejected; corrections are the mechanism. Content revision does not affect open or closed pre-starts.
 
-### AC-CO-4: Tenant isolation
-Given two companies, when a user from company A attempts to access company B's data, then access is denied.
-Offline: N/A. Authority: N/A. Evidence: Access denied response.
+Site state snapshot. Derived from §6.5, §6.6, §6.7, §6.4. Freshness-annotated per element.
 
----
+6.4.4 Conceptual model
 
-## 29. Worker management acceptance criteria
+Source-of-truth: PreStartContent (E, Site), PreStart (E, Site), PreStartContentRevision (F), PreStartContentItem (F), PreStartLifecycleEvent (F), PreStartParticipant (F), PreStartCorrection (F), DailyLogEntry (F, modelled as §6.7 Note evidence).
 
-### AC-WM-1: Worker invitation
-Given a company admin, when they invite a worker by email or phone, then an invitation is created with status pending and a WorkerInvited fact is recorded.
-Offline: No. Authority: Company Admin. Evidence: Invitation record, fact trail.
+PreStartAcknowledgement is not a separate fact type — it is a §4.3 Acknowledgement with pre_start_context.
 
-### AC-WM-2: Worker induction
-Given an invited worker, when they accept the invitation and complete induction, then their status changes to inducted and a WorkerInducted fact is recorded.
-Offline: No. Authority: Self (with valid invitation). Evidence: Worker record, fact trail.
+Derived: pre-start completion, Site daily state, participant acknowledgement matrix, presenters and participants.
 
-### AC-WM-3: Worker device registration
-Given an inducted worker, when they log in on a new device, then the device is registered and a WorkerDeviceRegistered fact is recorded.
-Offline: No. Authority: Self. Evidence: Device record, fact trail.
+6.4.5 Failure and recovery
 
-### AC-WM-4: Worker suspension
-Given a company admin, when they suspend a worker, then the worker cannot log in and a WorkerSuspended fact is recorded.
-Offline: No. Authority: Company Admin. Evidence: Worker status, fact trail.
+Participant not site-ready → rejected with specific failing requirements. Content not cached offline → presenting blocked. App killed after draft → committed draft preserved; uncommitted text best-effort. Duplicate acknowledgement/closure → idempotent. Closure rejected server-side → notified, correction path provided. Content revised while pre-start open → open pre-start retains version. Presenter capability revoked mid-pre-start → closure by former presenter rejected.
 
-### AC-WM-5: Worker role change
-Given a company admin, when they change a worker's role, then the worker's authority scope is updated and a WorkerRoleChanged fact is recorded.
-Offline: No. Authority: Company Admin. Evidence: Worker record, fact trail.
+6.4.6 Audit requirements
 
----
+Every pre-start-related F record carries: event identity, command identity, event type, subject, actor, device identity, device timestamp, server sync timestamp, reason (mandatory for corrections and excluded participants), payload.
 
-## 30. Project and site management acceptance criteria
+6.4.7 Acceptance criteria
 
-### AC-PS-1: Project creation
-Given a company admin, when they create a project with name, client, and timeline, then the project is created with status draft and a ProjectCreated fact is recorded.
-Offline: No. Authority: Company Admin. Evidence: Project record, fact trail.
+AC-DO-1 through AC-DO-14.
 
-### AC-PS-2: Site creation
-Given a project manager, when they create a site with geofence and address, then the site is created with status draft and a SiteCreated fact is recorded.
-Offline: No. Authority: Project Manager. Evidence: Site record, fact trail.
+6.4.8 AC-04 reconciliation
 
-### AC-PS-3: Work area definition
-Given a project manager, when they define a work area with polygon geometry, then the work area is created and a WorkAreaCreated fact is recorded.
-Offline: No. Authority: Project Manager. Evidence: Work area record, fact trail.
+EXTRACTION REQUIRED — not performed. Expected: NOT PRESENT.
 
-### AC-PS-4: Asset definition
-Given a project manager, when they define an asset with type and geometry, then the asset is created with status planned and an AssetCreated fact is recorded.
-Offline: No. Authority: Project Manager. Evidence: Asset record, fact trail.
+6.4.9 Open decisions
 
-### AC-PS-5: Site activation
-Given a project manager, when they activate a site, then the site status changes to active and a SiteActivated fact is recorded.
-Offline: No. Authority: Project Manager. Evidence: Site status, fact trail.
+Pre-start required before check-in (default false). Content authorship. Presenter minimum capability. Bulk acknowledgement (draft: not in v1). Correction window. Templates (draft: not in v1). Daily log retention. Language (English only). Weather capture (separate evidence). Pre-start attendance export. Presenter geographic presence (not enforced).
 
 ---
 
-## 31. Task management acceptance criteria
+§6.5 — Attendance & Timesheets
 
-### AC-TM-1: Task creation
-Given a supervisor, when they create a task with type, description, and assigned assets, then the task is created with status draft and a TaskCreated fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: Task record, fact trail.
+6.5.1 Invariants
 
-### AC-TM-2: Task assignment
-Given a supervisor, when they assign a task to a worker or crew, then the task status changes to assigned and a TaskAssigned fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: Task record, fact trail.
+· AT-INV-1 — Site-scoped. Every attendance event references exactly one Site.
+· AT-INV-2 — Subject and actor are distinct.
+· AT-INV-3 — Events are immutable.
+· AT-INV-4 — Attendance events are the source of truth. Timesheets are derived.
+· AT-INV-5 — Readiness gate is enforced at event creation.
+· AT-INV-6 — Offline attendance has deterministic behaviour.
+· AT-INV-7 — Provenance is complete.
+· AT-INV-8 — Corrections are additive and attributed.
+· AT-INV-9 — Attendance events are causally ordered. Check-out cannot precede its check-in; break-end cannot precede break-start; overlapping shift segments for the same worker are prohibited. Violations rejected before commit where determinable, and explicitly rejected/surfaced at sync where only server state can establish the violation.
+· AT-INV-10 — Duplicate commands apply once.
+· AT-INV-11 — Readiness expiry does not retro-terminate.
+· AT-INV-12 — Timesheet approval is a state, not a mutation.
 
-### AC-TM-3: Task start
-Given an assigned worker, when they start a task, then the task status changes to in-progress and a TaskStarted fact is recorded.
-Offline: Yes. Authority: Self (assigned worker). Evidence: Task record, fact trail.
+6.5.2 Operational requirements
 
-### AC-TM-4: Task progress update
-Given an assigned worker, when they update task progress, then the progress is recorded and a TaskProgressUpdated fact is recorded.
-Offline: Yes. Authority: Self (assigned worker). Evidence: Task record, fact trail.
+Event types (v1): CHECK_IN, CHECK_OUT, BREAK_START, BREAK_END, CORRECTION, FORCE_CLOSE.
 
-### AC-TM-5: Task completion
-Given an assigned worker, when they complete a task with required evidence, then the task status changes to complete and a TaskCompleted fact is recorded.
-Offline: Yes. Authority: Self (assigned worker). Evidence: Task record, evidence, fact trail.
+FORCE_CLOSE — administrative termination of an open shift without the subject's check-out. Actor ≠ subject. Mandatory reason. References the open shift's most recent CHECK_IN (or BREAK_START).
 
-### AC-TM-6: Task verification
-Given a supervisor, when they verify a completed task, then the task status changes to verified and a TaskVerified fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: Task record, fact trail.
+Who can record: Self; QR scan (self); QR scan (proxy — Supervisor or Company Admin); Manual proxy (Supervisor, reason required); Correction (authorised actor).
 
----
+Site scoping. Bound to a Site at creation. Multiple Sites requires selection. Unavailable Site shown with specific failing requirements.
 
-## 32. Attendance acceptance criteria
+Unique worker QR. Encodes identity, not action. Not a session token.
 
-### AC-AT-1: QR check-in
-Given a worker on-site, when they scan the site QR code, then an AttendanceCheckedIn fact is recorded with worker ID, site ID, timestamp, and geolocation.
-Offline: Yes. Authority: Self. Evidence: Attendance record, QR reference, fact trail.
+Timesheets. Derived view over events for subject × Site × work date window. Shows total worked minutes, break minutes, first check-in, last check-out, corrections with attribution. Not editable.
 
-### AC-AT-2: QR check-out
-Given a checked-in worker, when they scan the site QR code again, then an AttendanceCheckedOut fact is recorded.
-Offline: Yes. Authority: Self. Evidence: Attendance record, fact trail.
+Corrections. Additive events referencing prior events. Intents: adjust_time, void_event, add_missing_event, reassign_site.
 
-### AC-AT-3: Geofence validation
-Given a worker outside the site geofence, when they attempt to check in, then the check-in is flagged and an AttendanceFlagged fact is recorded.
-Offline: Yes. Authority: Self. Evidence: Flagged attendance record, fact trail.
+Approvals. submitted → approved or rejected, attributed. A correction after approval moves back to pending_review.
 
-### AC-AT-4: Attendance verification
-Given a supervisor, when they verify a flagged attendance record, then an AttendanceVerified fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: Verified attendance record, fact trail.
+6.5.3 Product behaviour
 
-### AC-AT-5: Duplicate check-in prevention
-Given a worker who is already checked in, when they attempt to check in again, then the duplicate is flagged.
-Offline: Yes. Authority: Self. Evidence: Flagged attendance record.
+Shift state (derived): not_present → on_shift → on_break → on_shift → not_present. Derived from events, not stored. Simultaneous on_shift at two Sites rejected.
 
----
+Event acceptance rules. Check-in requires site_ready, not_present at X, not on_shift elsewhere, and, if pre_start_required_before_check_in = true, pre_start_complete(site, work_date). Check-out requires on_shift or on_break at X and timestamp ≥ most recent check-in. Break start/end per state. Correction requires authority and non-violation.
 
-## 33. QA acceptance criteria
+Work date. OPEN — draft default: Site local timezone, cross-midnight bound to check-in work date. Resolution gate: before M6.
 
-### AC-QA-1: QA record creation
-Given a supervisor, when they create a QA record against an asset with type and description, then a QARecordOpened fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: QA record, fact trail.
+Multi-shift days permitted (split shifts); segments summed; overlaps rejected.
 
-### AC-QA-2: QA evidence attachment
-Given a QA record, when evidence is attached, then a QARecordEvidenceAttached fact is recorded with evidence reference and hash.
-Offline: Yes. Authority: Supervisor or Worker (depending on QA type). Evidence: QA record, evidence, fact trail.
+Cross-midnight shift belongs entirely to the check-in work date.
 
-### AC-QA-3: QA resolution
-Given a supervisor, when they resolve a QA record, then a QARecordResolved fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: QA record, fact trail.
+Readiness interaction. Checked at check-in only. Expiry mid-shift permits subsequent events. Suspension mid-shift: shift continues; new check-ins blocked.
 
----
+Offline-capable: check-in/out, break start/end, view current shift state, view own timesheet, correction authoring by Supervisor with cached referenced event.
 
-## 34. Blocker acceptance criteria
+Connectivity-required: timesheet approval, correction of non-cached events, cross-Site/cross-day reconciliation views.
 
-### AC-BL-1: Blocker raising
-Given a worker, when they raise a blocker against an asset or task, then a BlockerRaised fact is recorded with type, description, and severity.
-Offline: Yes. Authority: Self. Evidence: Blocker record, fact trail.
+Conflict semantics. Same worker, same field, later timestamp → later wins for derived state, both events preserved. Shift boundaries → local rejection if causality violated; if only discovered at sync, server rejection with reason. Corrections → applied in actor-performed order.
 
-### AC-BL-2: Blocker acknowledgment
-Given a supervisor, when they acknowledge a blocker, then a BlockerAcknowledged fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: Blocker record, fact trail.
+Timesheet approval lifecycle
 
-### AC-BL-3: Blocker resolution
-Given a supervisor, when they resolve a blocker, then a BlockerResolved fact is recorded.
-Offline: Yes. Authority: Supervisor. Evidence: Blocker record, fact trail.
+```text
+open → submitted → approved
+                 → rejected → open
+```
 
----
+6.5.4 Conceptual model
 
-## 35. Evidence acceptance criteria
+Source-of-truth: AttendanceEvent, CorrectionEvent, WorkerQrIdentity, SiteShiftBoundaryConfig, TimesheetApprovalEvent.
 
-### AC-EV-1: Evidence capture
-Given a worker, when they capture a photo as evidence, then the photo is compressed, hashed (SHA-256), and an EvidenceCaptured fact is recorded.
-Offline: Yes. Authority: Self. Evidence: Evidence file, hash, fact trail.
+Derived: current shift state, segment, worked minutes, timesheet, timesheet approval state, attendance summary.
 
-### AC-EV-2: Evidence attachment
-Given a fact, when evidence is attached, then an EvidenceAttached fact is recorded linking the evidence to the fact.
-Offline: Yes. Authority: Self. Evidence: Evidence reference, fact trail.
+6.5.5 Failure and recovery
 
-### AC-EV-3: Evidence integrity verification
-Given an evidence file, when its hash is computed and compared with the hash in the fact, then the hashes match.
-Offline: Yes. Authority: Any. Evidence: Hash comparison result.
+Not site-ready → rejected with requirements. Already on_shift elsewhere → rejected. Offline + crash → preserved. Duplicate → once. Server rejection → surfaced, preserved as rejected record. Clock drift → server rejects, correction path provided. Readiness expires mid-shift → continues. Site suspended mid-shift → continues. Offline approval attempt → rejected locally.
 
----
+6.5.6 Audit requirements
 
-## 36. Sync acceptance criteria
+Every event: event identity, command identity, subject, actor, source (SELF / QR_SELF / QR_PROXY / MANUAL_PROXY / CORRECTION), Site, device identity, device timestamp, server sync timestamp, type, correction reference, reason (mandatory for MANUAL_PROXY and CORRECTION).
 
-### AC-SY-1: Offline fact recording
-Given a worker offline, when they perform an operation, then a fact is recorded locally with sync_state pending.
-Offline: Yes. Authority: Self. Evidence: Local fact record.
+Every rejection: command identity, attempted action, reason, actor notification timestamp, actor subsequent action.
 
-### AC-SY-2: Fact sync
-Given pending facts, when connectivity is restored, then facts are synced to the server and sync_state changes to confirmed.
-Offline: N/A. Authority: Self. Evidence: Synced fact records.
+Every approval: timesheet identity, actor, action, reason (mandatory for rejected), timestamp.
 
-### AC-SY-3: Conflict detection
-Given conflicting facts, when sync occurs, then the conflict is detected and flagged.
-Offline: N/A. Authority: N/A. Evidence: Conflict record.
+6.5.7 Acceptance criteria
 
-### AC-SY-4: Deterministic sync
-Given the same set of facts, when they are applied in different orders, then the final state is identical.
-Offline: N/A. Authority: N/A. Evidence: State comparison.
+AC-AT-1 through AC-AT-12.
 
-### AC-SY-5: Sync retry
-Given a failed sync, when retry occurs, then the sync is attempted again with exponential backoff.
-Offline: N/A. Authority: N/A. Evidence: Sync retry log.
+6.5.8 AC-04 reconciliation
+
+Area Treatment
+Commands CHECK_IN / CHECK_OUT MODIFY (add BREAK, CORRECTION, FORCE_CLOSE)
+Identity commandId + eventId ACCEPT
+ProjectAssignment REJECT
+Scope project/person/work-date MODIFY → Site-scoped
+Sources SELF, QR_SCAN MODIFY (add QR_PROXY, MANUAL_PROXY, CORRECTION)
+Local commit atomicity MODIFY (timesheet derived, not committed)
+Offline check-in/out ACCEPT
+State CHECKED_IN/OUT MODIFY → derived
+Revision current/baseRevision FREEZE — §6.10 concern
+Duplicate command ACCEPT
+Ordering ACCEPT
+Authorization MODIFY (add site_ready check)
+QR proxy ACCEPT
+Timesheet first-in/last-out MODIFY
+Provenance MODIFY (add site; drop org)
+Work date from UTC REJECT
+Server rejection ACCEPT
+Restart persistence ACCEPT
+
+Three REJECTs, six MODIFYs, nine ACCEPTs.
+
+6.5.9 Open decisions
+
+Work date rule (OPEN). Break model (unpaid only). Proxy authority (Supervisor + Admin). Correction authority. Correction window. Approval requirement. Split-shift cap. Multiple Sites per day.
 
 ---
 
-## 37. Report acceptance criteria
+§6.6 — Progress
 
-### AC-RP-1: Progress report generation
-Given a project manager, when they generate a progress report for a site, then the report shows asset progress by work area with freshness timestamp.
-Offline: No. Authority: Project Manager. Evidence: Report output.
+6.6.1 Invariants
 
-### AC-RP-2: Attendance report generation
-Given a supervisor, when they generate an attendance report for a shift, then the report shows worker attendance with verification status.
-Offline: No. Authority: Supervisor. Evidence: Report output.
+· PR-INV-1 — Progress is derived. Asset never stores complete = true.
+· PR-INV-2 — Completion is claimed, then verified.
+· PR-INV-3 — Claims and verifications are immutable.
+· PR-INV-4 — Progress is asset-scoped.
+· PR-INV-5 — Quantities are first-class.
+· PR-INV-6 — Critical blockers gate progress.
+· PR-INV-7 — Task and asset are distinct.
+· PR-INV-8 — Verification authority is declared, not inferred.
+· PR-INV-9 — Over-claim is surfaced, never silent.
+· PR-INV-10 — Offline progress capture is deterministic.
+· PR-INV-11 — Aggregate progress is derived.
+· PR-INV-12 — Evidence requirements are per-requirement, not universal.
 
-### AC-RP-3: Report export
-Given a company admin, when they export a report as CSV, then the export is recorded as a ReportExported fact.
-Offline: No. Authority: Company Admin. Evidence: Exported file, fact trail.
+6.6.2 Operational requirements
 
-### AC-RP-4: Report freshness display
-Given a report, when it is displayed, then the freshness timestamp is prominently shown.
-Offline: Yes (cached). Authority: Any. Evidence: Report display.
+Task. References subject (asset / WorkArea / Site), assignee, optional window, scope description. Lifecycle: created → assigned → accepted → in_progress → complete / paused / cancelled / reassigned. Task completion is operational, not authoritative for progress.
 
----
+Completion claim. Asset identity, claimer, quantity claimed, method, evidence refs, optional task ref, device timestamp. Full or partial.
 
-## 38. Audit acceptance criteria
+Verification. Claim ref, verifier, outcome (accepted/rejected), reason (mandatory for rejection), evidence refs, timestamp.
 
-### AC-AU-1: Fact trail query
-Given a company admin, when they query the audit trail for an entity, then all facts for that entity are returned in chronological order.
-Offline: No. Authority: Company Admin. Evidence: Query results.
+Reversal. Prior event ref, actor, reason (mandatory).
 
-### AC-AU-2: Fact trail completeness
-Given any entity, when its audit trail is queried, then every state change is present as a fact with actor, timestamp, and authority scope.
-Offline: No. Authority: Company Admin. Evidence: Query results.
+Quantities. Where target quantity exists: unit and value. verified_quantity = sum(verified_claim.amount); progress = verified_quantity / target_quantity. Where no target: discrete (not_started / claimed / complete).
 
-### AC-AU-3: Audit trail immutability
-Given the audit trail, when any attempt is made to modify or delete a fact, then the attempt is rejected.
-Offline: N/A. Authority: N/A. Evidence: Rejection response.
+Authority. Worker can claim, withdraw own; Supervisor can verify, reject, reverse (Site), create/assign/cancel task; Company Admin can do all (Company scope).
 
-### AC-AU-4: Audit trail access logging
-Given an audit trail query, when it is executed, then an AuditTrailAccessed fact is recorded.
-Offline: No. Authority: Company Admin. Evidence: Access log, fact trail.
+Aggregate progress. WorkArea ← assets; Site ← WorkAreas/assets; Project ← Sites. Always computed.
 
----
+6.6.3 Product behaviour
 
-## 39. Map acceptance criteria
+Derived asset progress states: not_started, in_progress, pending_verification, complete, disputed.
 
-### AC-MP-1: Map rendering
-Given a site with assets, when the map is displayed, then all assets are rendered with correct geometry and color-coded by lifecycle state.
-Offline: Yes (cached). Authority: Any. Evidence: Map display.
+Claim acceptance. Asset active; claimant assigned or scoped; task window respected; rejected if CRITICAL blocker open; rejected if would exceed target without explicit over-claim flag and reason; accepted otherwise.
 
-### AC-MP-2: Asset tap
-Given a map with assets, when a worker taps an asset, then the asset detail panel is displayed with current state, progress, QA status, and blockers.
-Offline: Yes. Authority: Any. Evidence: Detail panel display.
+Verification acceptance. Verifier authority; claim not already verified/rejected; evidence requirements satisfied; rejected if CRITICAL blocker raised since claim; accepted otherwise.
 
-### AC-MP-3: Offline map
-Given a worker offline, when they open the map, then the cached map tiles and asset geometry are displayed.
-Offline: Yes. Authority: Any. Evidence: Map display.
+Reversal. Moves to disputed; notifies verifier and claimer; resolution is reversal_upheld or reversal_dismissed, both attributed.
 
-### AC-MP-4: Geofence detection
-Given a worker with location services enabled, when they enter or exit a site geofence, then the app detects the transition.
-Offline: Yes. Authority: Self. Evidence: Geofence event log.
+Task / progress interaction. Task completion operational; claim verification authoritative for progress. Task may be complete while asset in_progress; asset may be complete while task in_progress.
 
----
+Offline-capable: task creation against cached assets/workers, task transitions, claim raise and withdraw, evidence attachment, viewing own claims/tasks/cached states.
 
-## 40. Non-functional acceptance criteria
+Connectivity-required: claim verification, rejection, reversal raise/uphold/dismiss, cross-Site assignment, task creation against non-cached assets.
 
-### AC-NF-1: App cold start
-Given a mid-range Android device, when the app is cold-started, then it is ready for interaction within 3 seconds.
-Evidence: Performance measurement.
+Conflict semantics. Claims additive; task transitions later wins; verifications single (concurrent second rejected); reversals additive and independently resolved; reassignment later wins.
 
-### AC-NF-2: Map render performance
-Given 1000 assets, when the map is rendered, then it renders within 1 second.
-Evidence: Performance measurement.
+6.6.4 Conceptual model
 
-### AC-NF-3: Sync performance
-Given 100 pending facts, when sync occurs on 3G, then sync completes within 5 seconds.
-Evidence: Performance measurement.
+Source-of-truth: Task, TaskTransition, TaskAssignment, CompletionClaim, CompletionClaimWithdrawal, CompletionVerification, Reversal, ReversalResolution.
 
-### AC-NF-4: API response time
-Given any CRUD API call, when it is executed, then the p95 response time is under 200ms.
-Evidence: Performance measurement.
+Derived: claimed quantity, verified quantity, asset progress state, task state, task assignee, WorkArea/Site/Project progress, Site punch list.
 
-### AC-NF-5: Offline duration
-Given a worker offline, when they operate for 7 days without sync, then all operations function correctly and all facts are preserved.
-Evidence: Offline operation test.
+6.6.5 Failure and recovery
 
-### AC-NF-6: Zero data loss
-Given confirmed facts, when the server restarts, then all confirmed facts are preserved.
-Evidence: Data integrity test.
+Offline claim → durable, queued. App killed → preserved. Duplicate → once. Server rejection → surfaced with reason. Critical blocker after claim before verification → verification rejected. Critical blocker after verification → progress remains; further claims blocked. Concurrent claims → both preserved; over-claim surfaced. Claim rejected, disputed → new claim referencing prior. Reversal dismissed → claim remains verified. Target quantity changed → not permitted on active assets. Aggregate with stale cache → staleness surfaced.
+
+6.6.6 Audit requirements
+
+Every progress event: event identity, command identity, type, subject, actor, device identity, device timestamp, server sync timestamp, payload (quantity, reason, evidence refs, prior event refs). Every rejection records command identity, attempted action, reason, notification timestamp, subsequent action.
+
+6.6.7 Acceptance criteria
+
+AC-PR-1 through AC-PR-14.
+
+6.6.8 AC-04 reconciliation
+
+CLOSED — NOT PRESENT. No progress/task/completion-claim implementation in AC-04. COMPLETE matches in attendance code refer to timesheet completion, not work progress. claim matches in sync code refer to command claiming, not completion claims.
+
+6.6.9 Open decisions
+
+Target quantity change (no). Over-claim handling (permitted with reason). Discrete asset completion (first verified full claim). Verification requirement (always). Partial verification (no). Reversal window (none in v1). Reversal authority for original verifier (yes, with reason). Task without asset (yes). Crew-level task (yes). Task-level progress display (yes, separate). Punch list (derived view). Progress on archived assets (excluded). Cross-Site task assignment (no).
 
 ---
 
-## 41. Security acceptance criteria
+§6.7 — QA / Evidence / Blockers
 
-### AC-SE-1: Unauthenticated access
-Given an unauthenticated request, when it attempts to access any API endpoint, then access is denied with 401.
-Evidence: API response.
+6.7.1 Invariants
 
-### AC-SE-2: Unauthorized access
-Given an authenticated request without required authority, when it attempts an operation, then access is denied with 403.
-Evidence: API response.
+· QA-INV-1 — Evidence is immutable.
+· QA-INV-2 — Evidence is attributed.
+· QA-INV-3 — Evidence is Site-scoped.
+· QA-INV-4 — Location is captured, not corrected.
+· QA-INV-5 — QA state is derived, not stored.
+· QA-INV-6 — Blocker state is derived, not stored.
+· QA-INV-7 — Blocker resolution requires attribution.
+· QA-INV-8 — Critical blockers gate progress claims.
+· QA-INV-9 — Verification is a distinct act from submission.
+· QA-INV-10 — Evidence capture is offline-capable.
+· QA-INV-11 — QA and blocker state transitions are attributed and auditable.
+· QA-INV-12 — Corrections are additive.
+· QA-INV-13 — Blocker assignment is explicit.
+· QA-INV-14 — Evidence is not destroyed by asset lifecycle changes.
 
-### AC-SE-3: SQL injection
-Given any API endpoint, when malicious SQL is submitted as input, then the input is rejected and no SQL is executed.
-Evidence: Security test.
+6.7.2 Operational requirements
 
-### AC-SE-4: XSS prevention
-Given any user input displayed in the web dashboard, when malicious JavaScript is submitted, then the script is not executed.
-Evidence: Security test.
+Evidence types (v1): PHOTO, NOTE, SIGNATURE, FILE. (VOICE deferred.)
 
-### AC-SE-5: Evidence integrity
-Given an evidence file, when it is modified after capture, then hash verification fails.
-Evidence: Hash comparison.
+Evidence subjects: exactly one of asset, task, blocker, QA observation, or Site directly. Set at capture; immutable.
 
----
+QA observations. Claims about asset/task/Site state. Reference subject; carry evidence; have a lifecycle; attributed to submitter and verifier.
 
-## 42. Integration acceptance criteria
+Blocker types (draft): SAFETY, QUALITY, ACCESS, MATERIALS, EQUIPMENT, WEATHER, INFORMATION, OTHER.
 
-### AC-IN-1: R2/S3 evidence upload
-Given a captured evidence file, when it is synced, then it is uploaded to R2/S3 and the fact is updated with the storage URL.
-Evidence: Storage record, fact trail.
+Blocker severity (draft): CRITICAL, HIGH, MEDIUM, LOW. CRITICAL and HIGH gate.
 
-### AC-IN-2: WebSocket notification
-Given a synced fact, when other clients are connected, then they receive a WebSocket notification.
-Evidence: WebSocket message.
+Authority table in §6.7.2 — Worker can capture own/crew evidence, submit QA, raise blocker, resolve as assignee; Supervisor can verify QA, assign, verify resolution; Company Admin full scope.
 
-### AC-IN-3: Redis pub/sub
-Given a fact notification, when it is published to Redis, then all subscribed WebSocket servers receive it.
-Evidence: Redis pub/sub log.
+6.7.3 Product behaviour
 
----
+QA observation lifecycle
 
-## 43. Deployment acceptance criteria
+```text
+draft → submitted → under_review → verified
+                                → rejected → submitted (after correction)
+                                → withdrawn
+```
 
-### AC-DE-1: Docker build
-Given the server source code, when it is built as a Docker image, then the image builds successfully and passes all tests.
-Evidence: CI/CD pipeline result.
+Blocker lifecycle
 
-### AC-DE-2: Database migration
-Given a database migration, when it is applied, then the schema is updated without data loss.
-Evidence: Migration log, schema comparison.
+```text
+raised → acknowledged → in_progress → resolved → verified → closed
+                                    → escalated → in_progress
+                                    → dismissed (from any state with authority + reason)
+```
 
-### AC-DE-3: Rollback
-Given a deployed version, when rollback is triggered, then the previous version is restored and operational.
-Evidence: Rollback log.
+resolved and verified are distinct.
 
----
+Progress gating. CRITICAL blocker blocks completion claim. HIGH blocker requires explicit Supervisor override, attributed and reasoned.
 
-# PART D — DELIVERY MODEL
+Offline-capable: evidence capture (photo, note, signature, file), QA observation draft/submit, blocker raise, blocker acknowledgement/in_progress/resolved (assignee), viewing own submissions.
 
-## 44. Delivery principles
+Connectivity-required: QA verification, blocker verification, dismissal, escalation across Sites/roles.
 
-### 44.1 Milestone-driven delivery
-Delivery is organized into milestones. Each milestone has a defined scope, acceptance criteria, and a completion contract. No milestone is started until the previous milestone's contract is satisfied.
+Evidence upload vs creation. Creating evidence is offline-capable; uploading the binary is transmission per §6.10.
 
-### 44.2 Contract-first execution
-Every milestone has an execution contract that defines: what will be built, what will not be built, acceptance criteria, test requirements, and the definition of done. The contract is agreed before work begins.
+Amendment 1 (evidence immutability vs storage). Storage metadata is not evidence content. Upload state, storage reference, checksum, and transmission metadata may be populated as transmission progresses, without modifying the captured evidence fact.
 
-### 44.3 Fact-sourced progress
-Progress is measured by facts, not by subjective assessment. A milestone is complete when its acceptance criteria are met and verified by evidence.
+Amendment 2 (conflict authority). QA observation and blocker transitions are accepted only when valid against the server-authoritative current state and the actor has authority for that transition. Concurrent transitions are preserved. Where two otherwise-valid transitions race, the server's declared transition ordering determines the resulting derived state; no transition is silently discarded.
 
-### 44.4 No partial completion
-A milestone is either complete or not complete. There is no "80% done." Partial progress is tracked at the task level, not the milestone level.
+6.7.4 Conceptual model
 
-### 44.5 Audit-first reporting
-Every milestone report includes: facts recorded, acceptance criteria met, evidence provided, test results, and any deviations from the contract.
+Source-of-truth: Evidence, QaObservation, QaTransition, Blocker, BlockerTransition, BlockerAssignment.
 
----
+Derived: current QA state, current blocker state, current blocker owner, asset completion status, Site QA summary, critical blockers gating an asset.
 
-## 45. Milestone sequence
+6.7.5 Failure and recovery
 
-### M0: Repository archaeology and baseline
-Audit the existing repository. Document what exists, what works, what is broken, what is missing. Establish the baseline from which all future work is measured. No new features.
+Photo offline, app killed → preserved. Duplicate evidence → once. QA transition rejected server-side → surfaced with reason. Blocker verified after dismissal → server rejects. Evidence upload permanent failure → record retained, user notified. Location unavailable → recorded as unavailable, never back-filled. Asset closed with open blocker → permitted if not CRITICAL. Cross-Site evidence → rejected.
 
-### M1: Foundation and sync engine
-Implement the fact store, sync engine, offline queue, and basic Android app shell. The app can record facts locally and sync them to the server. No domain features.
+6.7.6 Audit requirements
 
-### M2: Company and worker management
-Implement company registration, worker invitation, induction, device registration, and role management. Web dashboard for admin operations. Android app for worker login and profile.
+Every evidence item: identity, command identity, type, subject, actor, source, device identity, device timestamp, location as captured (or unavailable), storage reference (on upload), server sync timestamp. Storage metadata is not evidence content.
 
-### M3: Project, site, and asset management
-Implement project creation, site creation, work area definition, asset definition, and map rendering. Web dashboard for configuration. Android app for map viewing.
+Every QA/blocker transition: transition identity, subject, prior state, new state, actor, timestamp, reason (mandatory for rejected, dismissed, escalated, resolved).
 
-### M4: Task management
-Implement task creation, assignment, progress tracking, completion, and verification. Android app for task execution. Web dashboard for task management.
+Every blocker assignment: blocker, assignee, assigning actor, timestamp, reason.
 
-### M5: QR attendance
-Implement QR code generation, check-in/out, geofence validation, and attendance verification. Android app for QR scanning. Web dashboard for attendance overview.
+6.7.7 Acceptance criteria
 
-### M6: QA and evidence
-Implement QA record creation, evidence capture, attachment, and resolution. Android app for evidence capture. Web dashboard for QA review.
+AC-QA-1 through AC-QA-13.
 
-### M7: Blockers
-Implement blocker raising, acknowledgment, and resolution. Android app for blocker management. Web dashboard for blocker overview.
+6.7.8 AC-04 reconciliation
 
-### M8: Timesheets
-Implement timesheet generation, submission, approval, and rejection. Android app for timesheet viewing. Web dashboard for timesheet approval.
+CLOSED — NOT PRESENT. No substantive AC-04 QA/blocker/evidence implementation. M16QaScreen is an attendance verification harness, not a QA-domain implementation. QR components frozen pending §6.3. Roadmap references only.
 
-### M9: Reports
-Implement progress, attendance, QA, and blocker reports. Web dashboard for report generation and export.
+6.7.9 Open decisions
 
-### M10: Audit trail
-Implement audit trail query, export, and access logging. Web dashboard for audit trail.
-
-### M11: Hardening
-Performance optimization, security audit, accessibility audit, and bug fixes.
-
-### M12: Beta release
-Deploy to production. Onboard beta companies. Monitor and fix issues.
+Voice evidence (deferred). Video (deferred). Evidence retention. Blocker SLA. QA verification scope. Rejection loop. Evidence deduplication (no). Signature weight (advisory pending legal review).
 
 ---
 
-## 46. Milestone contract template
+§6.8 — Communication
 
-Each milestone contract defines:
+6.8.1 Invariants
 
-1. **Scope**: what is included and excluded.
-2. **Dependencies**: what must be complete before this milestone starts.
-3. **Acceptance criteria**: the specific criteria that must be met.
-4. **Test requirements**: unit, integration, E2E, and offline tests.
-5. **Evidence requirements**: what evidence must be provided.
-6. **Definition of done**: the complete checklist for milestone completion.
-7. **Report requirements**: what the milestone report must contain.
+· COM-INV-1 — Communication is contextual. Anchored to a Site, Crew, Task, Blocker, QA observation, or Worker's current operational context. No general chat.
+· COM-INV-2 — Communication does not create domain facts.
+· COM-INV-3 — Communication identity is profile data.
+· COM-INV-4 — Crew communication is membership-scoped. Membership determines reachability, not authority.
+· COM-INV-5 — Supervisor and management contacts are profile-attributed.
+· COM-INV-6 — External channel handoff is not integration.
+· COM-INV-7 — Communication scope respects tenancy.
+· COM-INV-8 — Communication availability is derived from current state.
+· COM-INV-9 — Communication is offline-limited. No offline messaging.
+· COM-INV-10 — No communication is authoritative.
 
----
+6.8.2 Operational requirements
 
-## 47. Milestone completion verification
+Surfaces: Worker → Supervisor; Worker → Management; Worker → Worker within Crew; Supervisor → Crew (individual only); Site-scoped context (Supervisor roster visibility); Task/blocker context.
 
-A milestone is complete when:
+Methods: phone call handoff, WhatsApp handoff, email handoff. No in-app messaging, no push-based text/voice, no group messaging, no message history.
 
-1. All acceptance criteria are met and verified.
-2. All tests pass.
-3. All evidence is provided.
-4. The milestone report is complete.
-5. The code is merged to main.
-6. The deployment is successful.
-7. The human approver has signed off.
+Contact visibility.
 
----
+· Company Admin: all Company Workers.
+· Supervisor: Workers on assigned Sites.
+· Worker: Crew members (phone only by default), assigned Supervisor, management contact, self.
+· Not visible: other Companies, EPC/clients, Platform Admin (unless authorised for support, audited).
 
-## 48. Change management
+Crew communication. Available to active Crew members. A surface, not a channel. No persistent group.
 
-### 48.1 Scope changes
-Scope changes require a new milestone contract or an amendment to the existing contract. Amendments require human approval.
+Supervisor and management references. Profile fields, populated administratively. Not derived from Site assignment.
 
-### 48.2 Architecture changes
-Architecture changes require an updated architecture contract. Changes are documented as facts.
+Authority boundaries. Communication surfaces never permit an action.
 
-### 48.3 Blueprint changes
-Changes to this blueprint require a new version. The old version is archived but remains accessible. Changes are documented with rationale.
+Amendment 1. No group communication in v1. A Supervisor can view and initiate individual contact only. No Crew-wide broadcast, no group messaging, no group call.
 
----
+Amendment 2. Worker cannot discover or contact arbitrary Site workers outside their Crew. Supervisor retains roster visibility for assigned Sites.
 
-## 49. Quality gates
+Amendment 3. Phone visibility follows the fixed v1 rules above. Company-configurable contact privacy is deferred; if required later, it is added via §7/§8 reconciliation introducing an explicit C-class field.
 
-### 49.1 Code quality
-- All code passes linting.
-- All code passes type checking.
-- All code has adequate test coverage.
-- No TODO comments in merged code.
+6.8.3 Product behaviour
 
-### 49.2 Security quality
-- No known vulnerabilities in dependencies.
-- All inputs are validated.
-- All outputs are sanitized.
-- Authentication and authorization are enforced.
+No lifecycle. Handoffs are ephemeral UI actions. The only potential F record (CommunicationInitiated) is not introduced in v1.
 
-### 49.3 Performance quality
-- All performance acceptance criteria are met.
-- No memory leaks.
-- No unnecessary network requests.
-- Efficient database queries.
+Offline-capable: view cached contact details, open handoff with cached contact, view cached Crew memberships.
 
-### 49.4 Usability quality
-- All usability acceptance criteria are met.
-- UI is consistent with design system.
-- Error messages are clear and actionable.
-- Offline behavior is transparent to the user.
+Connectivity-required: retrieving uncached contacts, uncached Site-scoped roster, contact field updates.
 
----
+6.8.4 Conceptual model
 
-## 50. Risk register
+§6.8 introduces no new E or F entities. Contact details are profile fields on Worker. Crew membership is §6.3.4. Site assignment is §6.1.2. Supervisor and management references are profile fields.
 
-### 50.1 Technical risks
+Derived: contactable Workers, Site roster (for communication), Crew member list, Worker's current supervisor, Worker's management contact.
 
-**Risk**: Sync conflict resolution is complex and error-prone.
-**Mitigation**: Deterministic sync with comprehensive tests. Conflict resolution rules are explicit and tested.
+6.8.5 Failure and recovery
 
-**Risk**: Offline-first is hard to get right.
-**Mitigation**: Offline-first is the default, not an afterthought. All features are designed for offline first.
+No contact number → handoff hidden. Offline + uncached → rejected locally. External app missing → fallback (dialer or copy-to-clipboard). Cross-Company attempt → not visible, no handoff. Cross-Crew same-Site attempt → permitted only where both are on the Site roster. Stale cached contact → staleness indicated; handoff still permitted.
 
-**Risk**: Map performance with large asset counts.
-**Mitigation**: Spatial indexing, layer-based rendering, asset clustering at low zoom levels.
+6.8.6 Audit requirements
 
-**Risk**: QR code security.
-**Mitigation**: Time-limited, signed QR codes. No replay attacks. Geofence validation.
+No required audit F records in v1. A CommunicationInitiated record (if introduced later) would carry: event identity, command identity, actor, subject, context, method, timestamp, no content.
 
-### 50.2 Business risks
+6.8.7 Acceptance criteria
 
-**Risk**: Adoption resistance from workers.
-**Mitigation**: Simple, fast UI. Glove-friendly. Works offline. Minimal training required.
+AC-COM-1 through AC-COM-13.
 
-**Risk**: Data privacy concerns.
-**Mitigation**: GDPR compliance. Worker data is encrypted. Access is scope-limited. Audit trail is transparent.
+6.8.8 AC-04 reconciliation
 
-**Risk**: Integration complexity.
-**Mitigation**: API-first design. Webhook support (v2). Standard data formats.
+EXTRACTION REQUIRED — not performed. Expected: NOT PRESENT or REFERENCE.
 
-### 50.3 Operational risks
+6.8.9 Open decisions
 
-**Risk**: Server downtime.
-**Mitigation**: 99.9% uptime target. Horizontal scaling. Automated failover.
-
-**Risk**: Data loss.
-**Mitigation**: Zero data loss for confirmed facts. Automated backups. Point-in-time recovery.
-
-**Risk**: Evidence tampering.
-**Mitigation**: SHA-256 hashing. Immutable storage. Integrity verification.
+In-app messaging (deferred). Push notifications (platform notifications only in v1). Communication audit (no in v1). Supervisor reference derivation (manual). Group communication (closed — not in v1). Contact privacy configurability (deferred). External app fallback. Site roster visibility (closed — Supervisors only; Workers see own Crew + supervisor + management). Cross-Crew same-Site (closed — no for Workers). Translation (English only). Emergency communication (not in v1).
 
 ---
 
-## 51. Success metrics
+§6.9 — Reporting
 
-### 51.1 Adoption metrics
-- Number of companies registered.
-- Number of active workers per company.
-- Daily active users.
-- Retention rate (30-day, 90-day).
+6.9.1 Invariants
 
-### 51.2 Operational metrics
-- Facts recorded per day.
-- Sync success rate.
-- Sync latency (p50, p95, p99).
-- Offline operation duration.
+· REP-INV-1 — Reports are derived.
+· REP-INV-2 — Reports do not aggregate across Companies.
+· REP-INV-3 — Report content is a function of fact scope.
+· REP-INV-4 — Freshness is a first-class report property.
+· REP-INV-5 — Reports are permission-scoped. Scope enforced at fact retrieval.
+· REP-INV-6 — Exports are products of reports, not new facts. The act of export is an F record.
+· REP-INV-7 — Reports never mutate facts.
+· REP-INV-8 — Report configurations are C-class.
+· REP-INV-9 — Reports are reproducible.
+· REP-INV-10 — No report is authoritative for a fact.
+· REP-INV-11 — Reports are connectivity-required to generate.
+· REP-INV-12 — Report scope includes only active and archived entities, per configuration. Archived entities remain reportable; default exclusion is not an exclusion principle.
 
-### 51.3 Quality metrics
-- Bug rate (bugs per 1000 facts).
-- Crash rate (crashes per 1000 sessions).
-- QA defect rate.
-- Blocker resolution time.
+6.9.2 Operational requirements
 
-### 51.4 Business metrics
-- Revenue per company.
-- Customer acquisition cost.
-- Customer lifetime value.
-- Net promoter score.
+Report types (v1): Attendance summary, Timesheet, Worker timesheet history, Progress by asset, Progress by Project, QA observations, Open blockers, Blocker history, Pre-start register, Worker roster, Requirement compliance, Document register, Permits/expiries, Crew activity, Site daily state.
+
+Additional types may be added without blueprint amendment if they consume facts and produce D output.
+
+Scopes: Worker, Site, Project, Company, EPC/client (read-only, assigned Projects), Platform (Company metadata only).
+
+Permissions enforce scope at fact retrieval. A report never retrieves a fact the requester is not authorised to see.
+
+Export. CSV, PDF (or other). Content is a snapshot. The act of export is an F record. Exports carry freshness state at export.
+
+Report config. C-class. Company-scoped. Changes audited. Cannot override scope rules.
+
+6.9.3 Product behaviour
+
+Report computation is execution state, not a domain lifecycle:
+
+```text
+Report command
+    ↓
+CommandOutcome (accepted / rejected / failed / conflicted)
+    ↓
+D result / materialisation available (on accepted)
+```
+
+requested, computing, ready, failed are UI/execution status only. No domain states, no ReportFailed/ReportReady/ReportRequested F types.
+
+Freshness. Every report presents last confirmed server sync (where meaningful), freshness state per AC-ARCH-E2 where divergent, and whether facts are locally committed but not server-confirmed.
+
+Offline-capable: viewing previously-generated cached report result with freshness; viewing own facts (worker-scope).
+
+Connectivity-required: generating any cross-entity aggregate report, exporting, generating over uncached Sites, Company-scope or Project-scope reports. Offline generation attempts fail locally with reason.
+
+Conflicts. Reports are read-only over facts. ReportConfig changes follow §6.10.3's C-record rule.
+
+6.9.4 Conceptual model
+
+Source-of-truth: ReportExportEvent (F, Company) — only on successful export; a failed or rejected export produces only a CommandOutcome. ReportConfig (C, Company).
+
+No ReportRequest F. A report request is a command; its outcome is a CommandOutcome.
+
+Derived: any report; Site daily state; timesheet; worker attendance history; progress aggregate; QA/blocker summaries; requirement compliance; roster.
+
+6.9.5 Failure and recovery
+
+Offline generation → rejected locally. Server transient failure → CommandOutcome failed, retry permitted. Server authority failure → rejected with reason. Offline viewing from stale cache → freshness shown. Offline export → rejected locally. Concurrent ReportConfig changes → declared ordering, both audited. Authority revoked mid-request → rejected at completion. Underlying fact rejected mid-request → report reflects post-rejection fact set.
+
+6.9.6 Audit requirements
+
+CommandOutcome for every report command and every export command. ReportExportEvent only on successful export: actor, report type, scope, filter, output format, timestamp, freshness state at export, underlying fact count.
+
+No ReportRequested/ReportReady/ReportFailed F types.
+
+6.9.7 Acceptance criteria
+
+AC-REP-1 through AC-REP-12.
+
+6.9.8 AC-04 reconciliation
+
+EXTRACTION REQUIRED — not performed. Expected: NOT PRESENT or REFERENCE.
+
+6.9.9 Open decisions
+
+Output formats (CSV + PDF). Scheduled reports (v2). Report caching (session-only). Cross-Project reporting. EPC/client detail level (draft: aggregate; individual names only with explicit Site config). Fidelity vs performance (exact recomputation). Time zone. Worker-scope offline export (no). Report retention (no past results). Retired/archived inclusion (opt-in). Anonymised exports (deferred). Permission delegation (no in v1).
 
 ---
 
-## 52. Governance
+§6.10 — Offline / Sync
 
-### 52.1 Blueprint governance
-This blueprint is the authoritative source for SITE-SYNC. Changes require human approval and a new version. The blueprint is versioned and archived.
+6.10.1 Invariants
 
-### 52.2 Architecture governance
-The architecture contract is binding. Deviations require documented rationale and human approval.
+· OS-INV-1 — Local-first is the default. Any action a worker can take on site while online, they must be able to take offline. Connectivity is an optimisation, not a precondition.
+· OS-INV-2 — No silent loss.
+· OS-INV-3 — Durable intent. Durable local commit before user confirmation. Survives restart.
+· OS-INV-4 — Stable command identity. Client-generated; persists across retries, restarts, duplicate delivery. Same logical action cannot apply twice.
+· OS-INV-5 — Convergence or disclosure.
+· OS-INV-6 — Audit parity. Offline actions audited with same fidelity as online.
+· OS-INV-7 — Observable sync state.
+· OS-INV-8 — No partial mutation. Applied in full or not at all, locally and server-side.
+· OS-INV-9 — Ordering is per-entity, not global. Causally related actions on the same entity apply in user-performed order.
+· OS-INV-10 — Server rejection is explicit.
+· OS-INV-11 — Deletion is soft for auditable entities.
+· OS-INV-12 — Prolonged offline is a state, not an error.
 
-### 52.3 Delivery governance
-Milestone contracts are binding. Scope changes require human approval. Milestone completion requires human sign-off.
+6.10.2 Operational requirements
 
-### 52.4 Quality governance
-Quality gates are enforced. No code is merged without passing all gates. No milestone is complete without meeting all criteria.
+Must work offline (v1): sign-in/out (QR or equivalent), break start/end, task start/pause/complete, evidence capture, blocker raise/update/resolve, daily pre-start completion, acknowledgement with signature capture, crew and contact lookups against cached data, viewing own readiness, viewing assigned Sites and status.
+
+May require connectivity: creating Company/Project/Site, inviting a worker, administrative document verification, Platform administration, cross-Company operations, reporting exports aggregating across Sites.
+
+Must not be allowed offline: creating a new entity the server has never seen; anything requiring server-authoritative uniqueness guarantees.
+
+Boundary: field actions are offline-capable; administrative and structural actions are online-only in v1.
+
+6.10.3 Product behaviour
+
+Local commit. Validate locally → durable local record with stable identity and device timestamp → user shown committed state → queued for transmission. Never "saving…" for an offline-capable action.
+
+Transmission. Background. Per-command independent success/failure. Automatic bounded retries. Manual retry only on terminal failure.
+
+Sync state per command
+
+```text
+committed → queued → transmitting → accepted
+                                  → rejected (server) → user-visible, actionable
+                                  → failed (terminal) → user-visible, actionable
+```
+
+("confirmed" permitted as a UI label for accepted.)
+
+Duplicate delivery. Applied once server-side.
+
+Ordering. Same entity: user-performed order. Unrelated entities: any order. Dependencies enforced locally before queueing.
+
+Conflict semantics (per entity class, not globally):
+
+Conflict class Default resolution
+Same worker, same field, later timestamp Later wins, both recorded
+Same worker, shift boundaries Attempted conflict rejected locally; user prompted
+Evidence attachment Additive; no conflict
+Blocker state transition Local transition authoritative for worker's intent; server reconciles
+Readiness-gate violation discovered at sync Command rejected; user notified; preserved as rejected record
+
+"Last write wins" is not a global default.
+
+Reconciliation. Compare local and server state. Succeeded commands retired. Rejected/failed surfaced with reason and options. Server-side conflicts resolved by declared rule; outcome audited.
+
+Partial sync. Per-command. No all-or-nothing across queue.
+
+Connectivity loss mid-transmission. Local commit preserved; command returns to queued; no partial server state.
+
+Local/server divergence. Detected on reconnect; attributed to specific command(s); resolved by declared rule or surfaced. Never silently overwritten.
+
+Prolonged offline. Fully functional indefinitely for offline-capable actions. Warning at threshold (draft: 24h visible, 72h escalated). Commands retained until confirmed or explicitly abandoned. Storage constraints surfaced, not silently dropped.
+
+Recovery after restart. Committed but unsynced commands survive. In-progress forms: best-effort. Queue resumes without intervention.
+
+Deletion and archival. Soft state change, transmitted as any command. Hard deletion Platform Admin under retention policy, audited. Archival is a state, not removal.
+
+User-facing. Sync indicator per action. Queue view available. Failed commands actionable (retry, correct, abandon with reason). Offline state visible but not modal.
+
+6.10.4 Conceptual model
+
+Source-of-truth (local): LocalCommand, LocalEntityState, QueueEntry, LocalAuditEvent.
+
+Source-of-truth (server): ServerEntityState, ServerAuditEvent, CommandReceipt.
+
+Derived: sync indicator per action, entity sync state, reconciliation outcome.
+
+6.10.5 Failure and recovery
+
+Transmission fails → returns to queue. Server rejects → user notified, preserved. Server unreachable → queue grows, user warned at threshold, no loss. Device restart mid-transmission → preserved, retried. Duplicate delivery → once. Conflict on reconnect → per-entity rule, audited. Unrecoverable divergence → surfaced with attribution. Local storage constraint → user prompted, no silent eviction.
+
+6.10.6 Audit requirements
+
+Every command: stable ID, actor, entity target, intent, device timestamp, sync timestamp, outcome. Every conflict resolution: conflicting commands, rule, outcome. Every rejection: reason, user notification, user's subsequent action. Offline and online audited identically except sync timestamp. Immutable on both sides.
+
+6.10.7 Acceptance criteria
+
+AC-OS-1 through AC-OS-10.
+
+6.10.8 Open decisions
+
+Prolonged-offline warning threshold (24h / 72h). In-progress form preservation (best-effort). Local queue max size (no hard cap). Server-authoritative entities (structural only). Conflict rules per-entity (v1) with per-field refinement later. Client-side conflict resolution for declared-safe cases.
 
 ---
 
-## 53. Appendix
+§6.11 — Administration
 
-### 53.1 Fact type schema
-Each fact type has a JSON schema defining its payload structure. Schemas are versioned and stored in the repository.
+6.11.1 Invariants
 
-### 53.2 API specification
-The REST API is specified in OpenAPI 3.0 format. The specification is generated from the code and kept up to date.
+· AD-INV-1 — Administration is authority-scoped, not identity-scoped.
+· AD-INV-2 — Accepted administrative mutations produce domain facts; attempted commands produce CommandOutcomes. No administrative fact layer separate from §7's F-record union.
+· AD-INV-3 — No administrative mutation of F records. Corrections additive. Retention destruction is a Platform retention action, not an admin capability.
+· AD-INV-4 — Overrides are named, reasoned, attributed. No silent admin mode.
+· AD-INV-5 — Configuration is C-class. Never overrides a domain invariant.
+· AD-INV-6 — Audit visibility is bounded by scope.
+· AD-INV-7 — Administrative actions are structural. Overwhelmingly connectivity-required.
+· AD-INV-8 — Invitations are the sole membership creation path in v1.
+· AD-INV-9 — Tenant isolation is enforced at storage.
+· AD-INV-10 — Administrative surfaces are not a second permission system. Capabilities gate field actions; admin roles gate administrative actions.
 
-### 53.3 Database schema
-The database schema is defined in Drizzle ORM migrations. The schema is versioned and tested.
+6.11.2 Operational requirements
 
-### 53.4 Android app architecture diagram
-[Diagram placeholder: Android app module dependency graph]
+Company Admin — scoped to Company. Company profile, user management (invite, suspend, offboard), capability grant/revoke, Crew management, Project/Site lifecycle, ExternalParty, Requirement management, document administration, QR administration, configuration, audit visibility, overrides (force-close shift, dismiss blocker, reverse verification).
 
-### 53.5 Server architecture diagram
-[Diagram placeholder: Server component diagram]
+Platform Admin — Platform-scoped. Company lifecycle, cross-Company transfer, retention processing, Platform configuration, escalation handling. Not: operational authority over a Company's field actions; mutation of a Company's F records; bypass of a Company's invariants.
 
-### 53.6 Data flow diagram
-[Diagram placeholder: Fact flow from capture to sync to read model]
+Surfaces: Company, Users, Projects, Requirements, Crews, Audit (read-only), Configuration.
+
+Configuration scope: Company, Project, Site. Precedence: Site > Project > Company.
+
+Scope boundaries. Company Admin bounded by Company. Platform Admin bounded by Platform; cannot substitute for Company operational authority. Cross-Company references only via TransferEvent.
+
+Connectivity-required: all administrative mutations. Offline-readable: cached profile, user list, project/site list, cached audit.
+
+6.11.3 Product behaviour
+
+Administrative action lifecycle. Follows §6.10 command model. Connectivity-required; do not enter offline queue. A rejected admin command produces a CommandOutcome and is surfaced.
+
+Invitation flow. Admin initiates; invitation carries Person reference or invitation identity; recipient accepts; Person resolved/created; Worker created; onboarding proceeds per §4. Admin cannot skip invitation, create a Worker directly, or create a Person directly.
+
+User suspension / offboarding. Company Admin action with mandatory reason. Offboarding with open artifacts blocked until force-close, reassign, resolve, or address.
+
+Override actions (three in v1), each named:
+
+· Force-close shift — Company Admin only. AttendanceEvent type FORCE_CLOSE, actor = admin, subject = worker, mandatory reason.
+· Dismiss blocker — Company Admin or authorised Supervisor, mandatory reason.
+· Reverse verification — Company Admin, mandatory reason. Produces a Reversal.
+
+Each is a normal domain fact, subject to the domain's rules.
+
+Audit surface. Read-only. Queryable by entity, actor, timestamp, event type. Derived from F records. Export permitted for own Company.
+
+Configuration. Site > Project > Company. Cannot override invariants.
+
+Company setup (M1): Company created → profile → requirements → Project → Site → Site-scoped requirements → first Workers invited.
+
+6.11.4 Conceptual model
+
+No new E entities. Introduces (all F):
+
+· Invitation (F, Company)
+· CapabilityGrant (F, Company)
+· ConfigChangeEvent (F, Company/Project/Site)
+· RetentionDestructionEvent (F, Platform) — not part of any Company's retention set; survives the destruction it causes; references destroyed records, retention policy version, and Platform actor.
+
+Removed: AdminActionEvent, OverrideEvent. Overrides produce domain-canonical events.
+
+Derived: Company profile, current requirements, current Users, Company audit trail, Platform Company list.
+
+6.11.5 Failure and recovery
+
+Admin action offline → rejected. Server rejection → CommandOutcome with reason. Concurrent actions → declared ordering; loser rejected with reason. Hard-delete attempt → not reachable. Out-of-scope attempt → rejected at creation. Config change violating invariant → rejected with reason. Offboarding with open artifacts → blocked, resolutions surfaced. Platform operational authority → rejected. Config conflict → declared ordering, both audited.
+
+6.11.6 Audit requirements
+
+Every administrative action: event identity, command identity, event type, subject, actor, acting scope, device identity, device timestamp, server sync timestamp, reason (mandatory for suspension, offboarding, capability revocation, override actions, retention destruction, transfer), payload. Administrative audit records identical in structure to domain audit records.
+
+6.11.7 Acceptance criteria
+
+AC-AD-1 through AC-AD-12. AC-AD-1 distinguishes accepted mutations (domain F record) from rejected/failed/conflicted commands (CommandOutcome).
+
+6.11.8 AC-04 reconciliation
+
+OPEN / PENDING — extraction not performed.
+
+6.11.9 Open decisions
+
+Invitation delivery mechanism. Platform escalation consent. Configuration history (resolved: not required; facts capture resolved values). Company offboarding. Retention destruction policy. Admin session duration/re-auth. Multi-Company Admin. Admin visibility across Sites. Delegated administration. Bulk operations.
 
 ---
 
-END OF MASTER BLUEPRINT
+§7 — Conceptual Data Model
+
+v0.7.2 + recorded §6.3 / §6.4 / §6.9 catalogue amendments LOCKED.
+
+7.1 Invariants
+
+· DM-INV-1 — Identity is stable. Never reused.
+· DM-INV-2 — Facts are immutable. Append-only.
+· DM-INV-3 — Derived state is never authoritative.
+· DM-INV-4 — Everything has an explicit ownership scope. Platform, Company, Project, Site, or Worker.
+· DM-INV-4a — Ownership scope and operational scope are distinct.
+· DM-INV-5 — Company is the tenancy boundary.
+· DM-INV-6 — Site is the operational boundary.
+· DM-INV-7 — No entity is orphaned.
+· DM-INV-8 — Deletion is soft for auditable entities.
+· DM-INV-9 — Audit is derivable from facts.
+· DM-INV-10 — Offline facts are locally authoritative until reconciled. Server authoritative for server-governed validation, uniqueness, authorization, conflict resolution, and designated state transitions.
+· DM-INV-10a — "Locally authoritative" means locally authoritative for the local slice, not globally.
+· DM-INV-11 — No entity has two identities.
+· DM-INV-12 — Vocabulary is fixed.
+
+7.2 The universal pattern
+
+Every stateful concept is exactly one of four kinds:
+
+1. Identity-bearing entity (E) — stable identity; current representation derived from creation fact + immutable domain facts defining lifecycle, attributes, and relationship state.
+2. Immutable fact record (F) — append-only.
+3. Configuration record (C) — current value is its meaning.
+4. Derived read model (D) — recomputable.
+
+No fifth kind.
+
+7.3 Entity catalogue
+
+E entities: Company (Platform), Person (Platform), Device (Platform), Worker (Company), ProjectAssignment (Project), SiteAssignment (Site), Project (Company), Site (Project), WorkArea (Site), Asset (Site), ExternalParty (Company), ProjectExternalParty (Project), Requirement (Company/Project/Site), Task (Site), QaObservation (Site), Blocker (Site), WorkerQrIdentity (Company), Crew (Company), CrewMembership (Company), CrewSiteAssociation (Site), PreStartContent (Site), PreStart (Site), HandoverRecord (F per §6.3 review — reclassified).
+
+F entities: LifecycleEvent, TransferEvent, AssetGeometryEvent, AssetLifecycleEvent, AssetWorkAreaAssignment, AttendanceEvent, CorrectionEvent, TimesheetApprovalEvent, TaskTransition, TaskAssignment, CompletionClaim, CompletionClaimWithdrawal, CompletionVerification, Reversal, ReversalResolution, Evidence, QaTransition, BlockerTransition, BlockerAssignment, RequirementSatisfaction (+ subtypes DocumentRevision, InductionCompletion, Acknowledgement), CommandReceipt, CommandOutcome, Invitation, CapabilityGrant, ConfigChangeEvent, RetentionDestructionEvent, ReportExportEvent, PreStartContentRevision, PreStartContentItem, PreStartLifecycleEvent, PreStartParticipant, PreStartCorrection, DailyLogEntry, WorkerProfileChange / WorkerLifecycleEvent / WorkerQrIdentityEvent.
+
+C entities: SiteShiftBoundaryConfig, CompanyOnboardingConfig, ProjectOnboardingConfig, SiteOnboardingConfig, RoleCapability, CompanyBrandConfig, ReportConfig.
+
+D entities: all derived read models — company readiness, site readiness, current shift state, timesheet, timesheet approval state, asset current geometry/lifecycle/WorkArea, asset progress/QA/blocker state, task state/assignee, WorkArea/Site/Project progress, Site roster, Site punch list, map render, sync indicator, worker site list, audit trail, pre-start completion, Site daily state, contactable Workers, Crew member list, report outputs.
+
+7.4 Ownership, identity, scoping
+
+Platform owns: Company (as tenancy root), Person, Device, CommandReceipt, RetentionDestructionEvent.
+Company owns: Worker, ExternalParty, WorkerQrIdentity, Crew, CrewMembership, Company-scoped Requirements, config.
+Project owns: Site, ProjectAssignment, ProjectExternalParty, Project-scoped Requirements.
+Site owns: WorkArea, Asset, all field-operation facts, SiteAssignment, CrewSiteAssociation, PreStartContent, PreStart.
+Worker is the actor of many facts but does not own them.
+
+Identity generated where entity is born. Globally unique within its scope. Transfer creates a new identity for the transferred Project; the old identity remains unreferenced and unreused.
+
+7.5 Immutability and lifecycle classification
+
+Class Lifecycle Mutated by
+E Stable identity, derived current representation Authorized actors via facts
+F Append-only Nobody
+C Current value authoritative Authorized admin actors
+D Recomputable Nobody directly
+
+Relationship-entity rule. A relationship is E if it has state independent of its endpoints; otherwise F or D. ProjectAssignment and SiteAssignment are E. AssetWorkAreaAssignment is F.
+
+E-entity current representation is derived from identity + creation fact + immutable domain facts (AttributeChangeEvents where §7 specifies them; dedicated lifecycle/relationship facts where the owning section specifies them). The architecture must not flatten this distinction.
+
+7.6 Relationships
+
+```text
+Platform
+  ├── Person
+  ├── Device
+  └── Company
+        ├── Worker (membership → Person)
+        │     ├── ProjectAssignment ── Project
+        │     ├── SiteAssignment ── Site
+        │     ├── CrewMembership ── Crew
+        │     └── WorkerQrIdentity
+        ├── ExternalParty
+        ├── Crew
+        │     └── CrewSiteAssociation ── Site
+        └── Project
+              ├── Site
+              │     ├── WorkArea
+              │     ├── Asset
+              │     └── [field-operation facts]
+              └── ProjectExternalParty
+```
+
+Cross-scope references by identity, never by containment. Actor ≠ subject is universal.
+
+7.7 Derived state — three rules
+
+1. Never authoritative.
+2. Materialisable but not required.
+3. Freshness is a product fact.
+
+7.8 Audit trail
+
+```text
+AuditTrail
+    ├── DomainFacts        (F records about domain entities)
+    └── CommandOutcomes    (F records about command processing)
+```
+
+Every F record is an audit entry. Every E entity's current representation derived from identity + AttributeChangeEvents. C-record changes are F records. D records are not audit entries directly.
+
+Minimum common audit fields: event identity, command identity, actor, device identity, device timestamp, server sync timestamp, reason (where required).
+
+7.9 Deletion, retention, archival
+
+F records never operationally deleted. E records retired or archived. C records may be deleted if non-historical. D records never explicitly deleted. Site archival preserves facts. Company offboarding is archival; retention destruction per §8 AC-ARCH-H5.
+
+7.10 Offline interaction with §6.10
+
+Local side: E and F records locally are source-of-truth until confirmed. Server side: F records created on receipt; CommandReceipt guarantees idempotency. Reconciliation converges to same identity and content. Derived state computed independently on each side; may differ offline; must converge or be disclosed.
+
+7.11 Onboarding open decision — RESOLVED
+
+Onboarding state is not an entity. It is a derived read model computed from RequirementSatisfaction. company_ready and site_ready are derived predicates. Materialisation permitted; recomputable from RequirementSatisfaction alone.
+
+7.12 Failure and recovery
+
+Derived disagreement → recompute; if persists, surface. E-record references retired parent → preserved. F-record for archived Site → accepted. CommandReceipt without local → recoverable. Local without receipt → retransmit, idempotent. Duplicate F-records → one receipt. Stale aggregate → staleness surfaced. Hard-delete attempt → not reachable.
+
+7.13 Acceptance criteria
+
+AC-DM-1 through AC-DM-23, including:
+
+· AC-DM-15 through AC-DM-19 (from §7 review amendments)
+· AC-DM-20 through AC-DM-23 (Device)
+
+7.14 AC-04 reconciliation
+
+PARTIAL — schema-level. Sync schema ALIGNS strongly. Identity/tenancy schema CONFLICTS with PS-INV-1 and DM-INV-5.
+
+7.15 Open decisions
+
+· Company offboarding — DEFERRED to Platform retention policy.
+· Configuration history — RESOLVED: not required; facts capture resolved values.
+· Retention windows — DEFERRED to Platform retention policy.
+· Crew ownership scope — CLOSED: Company-scoped reusable Crew + Site-scoped CrewSiteAssociation.
+· Cross-Company Person identity — draft: same Person, two Worker memberships.
+· Derived materialisation policy — implementation choice.
+· Audit trail materialisation — implementation choice.
+· CommandReceipt retention — at least as long as any retry window; exact deferred to §8.
+· Cross-Site entity references — not in v1.
+· Entity extension points — requirements yes; asset types no; event types no.
+· Person identity across Platform — globally unique at Platform level; visible only to Companies the Person is a member of.
+· Physical DeviceInstallation representation — implementation choice; must not introduce a second identity.
+
+---
+
+§8 — Architectural Constraints
+
+8.0 Purpose
+
+§8 translates the blueprint into constraints on any implementation. It does not choose languages, databases, frameworks, protocols, or algorithms. It eliminates classes of implementation that cannot satisfy the blueprint.
+
+8.1 Constraint scope
+
+Each AC-ARCH-* cites the invariants it enforces and the acceptance criteria that verify it.
+
+8.2 Categories
+
+```text
+A. Storage model
+B. Identity and isolation
+C. Sync and reconciliation
+D. Audit and provenance
+E. Derivation and freshness
+F. Offline capability
+G. Failure and recovery
+H. Lifecycle and retention
+I. Extensibility and evolution
+```
+
+8.A — Storage model
+
+· AC-ARCH-A1 — Four-class storage discipline. Storage must express E, F, C, D without collapsing into one mutable-row model.
+· AC-ARCH-A2 — Single identity per entity, except where the blueprint requires intentional replacement. No client/server dual-keying. A2a — Project transfer creates a successor identity, not a rewrite; linkage via TransferEvent.
+· AC-ARCH-A3 — E-entity current representation derived from creation fact plus attribute-change history. Materialisation permitted; authority not.
+· AC-ARCH-A4 — No stored status, boolean, or flag may be authoritative for a derived value. Physical columns permitted as materialisations, C records, or internal indexes.
+
+8.B — Identity and isolation
+
+· AC-ARCH-B1 — Company as tenancy boundary. Enforced at storage; verifiable by test.
+· AC-ARCH-B2 — Site as operational boundary. Every field-operation fact Site-scoped.
+· AC-ARCH-B3 — Cross-tenant references prohibited except through the transfer model. TransferEvent, successor linkage, Platform audit records permitted.
+· AC-ARCH-B4 — Device as Platform-scoped E entity.
+
+8.C — Sync and reconciliation
+
+· AC-ARCH-C1 — Durable local commit before success.
+· AC-ARCH-C2 — Stable command identity. Client-generated; persists across retries, restarts, duplicate delivery.
+· AC-ARCH-C3 — Atomicity scoped to each authority boundary. Client and server do not perform identical mutations. Each is atomic within its own boundary.
+· AC-ARCH-C4 — Per-entity ordering.
+· AC-ARCH-C5 — Explicit terminal outcomes, using §7 CommandOutcome vocabulary. accepted / rejected / failed / conflicted. C5a — "confirmed" permitted as UI label.
+· AC-ARCH-C6 — Per-entity-class conflict semantics. No global LWW default.
+· AC-ARCH-C7 — Reconciliation produces convergence or disclosure.
+· AC-ARCH-C8 — Two-sided source-of-truth. Neither side a cache of the other. Server authority explicit for designated operations.
+· AC-ARCH-C9 — CommandOutcome retention. Rejected/failed/conflicted retained as auditable records independent of domain fact production.
+· AC-ARCH-C10 — Structural operations are connectivity-required.
+
+8.D — Audit and provenance
+
+· AC-ARCH-D1 — Audit derivable from facts.
+· AC-ARCH-D2 — Audit fields present on every F record.
+· AC-ARCH-D3 — Actor / subject distinction explicit.
+· AC-ARCH-D4 — No operational mutation or deletion of F records. Retention destruction permitted and audited.
+· AC-ARCH-D5 — Device attribution on facts.
+· AC-ARCH-D6 — Offline/online audit parity.
+
+8.E — Derivation and freshness
+
+· AC-ARCH-E1 — Derivability. Every D record recomputable from E and F records alone.
+· AC-ARCH-E2 — Freshness state, not universal timestamp. Must distinguish locally committed / server-confirmed / stale / unknown.
+· AC-ARCH-E3 — No derived state as input to facts.
+· AC-ARCH-E4 — Aggregate derivability.
+
+8.F — Offline capability
+
+· AC-ARCH-F1 — Offline operation relative to documented local preconditions. Fails locally with specific reason where a precondition is unmet.
+· AC-ARCH-F2 — Operational continuity for offline-capable actions. Connectivity-required operations remain explicitly unavailable.
+· AC-ARCH-F3 — Observable sync state.
+· AC-ARCH-F4 — No silent queue loss.
+
+8.G — Failure and recovery
+
+· AC-ARCH-G1 — Idempotent server application.
+· AC-ARCH-G2 — Terminal failure visibility.
+· AC-ARCH-G3 — Recovery after restart.
+· AC-ARCH-G4 — No partial mutation.
+· AC-ARCH-G5 — Clock drift tolerance. Explicit rejection, not silent reordering.
+
+8.H — Lifecycle and retention
+
+· AC-ARCH-H1 — Soft delete for operational deletion. No E or F record referenced by another is hard-deleted by any user path.
+· AC-ARCH-H2 — Site archival preserves facts.
+· AC-ARCH-H3 — Company offboarding is archived, not purged operationally.
+· AC-ARCH-H4 — Configuration retention. Facts capture resolved values at creation time.
+· AC-ARCH-H5 — Retention destruction. The only mechanism by which F records may cease to exist. Platform-initiated, policy-permitted, recorded as RetentionDestructionEvent that survives.
+
+8.I — Extensibility and evolution
+
+· AC-ARCH-I1 — Asset taxonomy closed in v1.
+· AC-ARCH-I2 — Requirement types scoped, set fixed in v1.
+· AC-ARCH-I3 — Event vocabulary fixed. New types via blueprint amendment.
+· AC-ARCH-I4 — No field-operational entity or fact belongs to multiple Sites. Containment entities (Project, Company) unaffected.
+
+8.J — What §8 does not constrain
+
+Programming languages, runtimes, frameworks, mobile UI framework, local storage engine, server storage engine, sync algorithm, conflict resolution mechanism per entity class, map library and tile source, push mechanism, authentication provider, hosting, CI/CD.
+
+Each must satisfy §8.2–§8.I. None is dictated.
+
+8.K — Architecture acceptance criteria
+
+AC-ARCH-0.1 through AC-ARCH-0.8, verified at M0.
+
+8.L — AC-04 implications
+
+No item promotes solely on the basis of §8. Each salvage item must pass: blueprint anchor test, DM-INV and domain INV tests, §8 constraint tests, and its own predating acceptance test (INV-C).
+
+8.M — Open decisions
+
+Local storage engine. Sync algorithm. Conflict resolution mechanisms per entity class. Physical DeviceInstallation representation. Server storage and tenancy mechanism. Audit materialisation strategy. Plus inherited opens from §6.10.8, §7.15.
+
+---
+
+§11 — Milestone map
+
+· M0 — Product / Architecture Contract
+· M1 — Identity, Company & Onboarding
+· M2 — Projects & Sites
+· M3 — Map / GIS Operating Surface
+· M4 — Workers, Crews & Communication
+· M5 — Daily Operations / Pre-starts
+· M6 — QR Attendance & Timesheets
+· M7 — Tasks / Progress / Piles
+· M8 — QA / Evidence / Blockers
+· M9 — Reporting / Administration
+· M10 — Offline / Sync / Recovery
+· M11 — Full Integration
+· M12 — Android Field Validation
+
+Sequence provisional, validated against §8. Onboarding remains M1.
+
+---
+
+§12 — Salvage register
+
+Status: PARTIAL.
+
+ID Item Status
+SR-001.1 init_identity_tenancy REFERENCE
+SR-001.2 device_installations FREEZE
+SR-001.3–.5 RLS pattern SALVAGE (pattern only)
+SR-001.6–.11 sync mechanism SALVAGE (mechanism)
+SR-001.12–.13 PLpgSQL stack FREEZE
+SR-002.1–.8 sync source SALVAGE (mechanism)
+SR-003.1 idempotency SALVAGE
+SR-004 CI SALVAGE
+SR-005 tests SALVAGE where §6.10-anchored
+SR-006 GitHub history REFERENCE
+SR-007 M1.x structure DISCARD
+SR-008 existing implementation PARTIALLY CLASSIFIED
+— identity/auth/QR (§6.3) REFERENCE / FREEZE / SALVAGE (mechanism) / NEW
+— pre-start (§6.4) OPEN / PENDING
+— reporting (§6.9) OPEN / PENDING
+— administration (§6.11) OPEN / PENDING
+
+Rules. No promotion without anchor + predating test + §8 compliance. INV-C in strict form: the test predates the implementation being promoted, not merely its integration.
+
+Critical leak note. AC-04's CompanyMembership is not renameable to Worker. Doing so would silently preserve the organisation-scoped identity model and violate WC-INV-1/2/3.
+
+---
+
+M0 — Product / Architecture Contract
+
+v1.0.1 — LOCKED.
+
+M0.1 — Blueprint baseline (frozen)
+
+Per §0.1 version register. §7 means v0.7.2 base text plus recorded §6.3/§6.4/§6.9 catalogue amendments. Where a section carries recorded amendments, the M0.1 table's version means the locked text including all amendments.
+
+M0.2 — Canonical model
+
+Four classes. No fifth. E current representation derived from identity + creation fact + immutable domain facts (AttributeChangeEvent where §7 specifies it; dedicated lifecycle/relationship facts where the owning section specifies them). The architecture must not flatten this distinction.
+
+Prohibited: stored domain booleans acting as authoritative state; mutable E attributes as sole authority; derived values presented as source of truth; parallel audit store; any shadow reporting/messaging/notification/admin layer writing outside the F-record model.
+
+M0.3 — Architecture requirements
+
+M0.3.1 Tenancy and scope isolation (with RLS enforceability clarification: bypass paths must be addressed; "we use RLS" is not satisfaction).
+M0.3.2 Identity.
+M0.3.3 E/F/C/D persistence.
+M0.3.4 Immutable facts.
+M0.3.5 Derived state.
+M0.3.6 Command processing.
+M0.3.7 CommandOutcome with explicit local/server distinction — locally rejected / locally committed / server accepted / server rejected / server failed / server conflicted. One stable command identity across all layers. Locally rejected is terminal and not queued.
+M0.3.8 Idempotency.
+M0.3.9 Offline durable intent.
+M0.3.10 Sync and reconciliation.
+M0.3.11 Per-entity conflict semantics.
+M0.3.12 Audit.
+M0.3.13 Freshness.
+M0.3.14 Authorization.
+M0.3.15 Device identity.
+M0.3.16 Retention destruction.
+M0.3.17 Android / local persistence.
+M0.3.18 Server persistence.
+
+M0.4 — Salvage boundary
+
+No artifact promoted by M0 itself. Promotion requires anchor + test that predates the implementation being promoted (INV-C strict) + §8 compliance. Where no qualifying test exists, a new test must be written before promotion.
+
+M0.5 — Pending extraction gate
+
+§6.4, §6.8, §6.9, §6.11 extractions OPEN / PENDING. Do not block M0; block promotion of corresponding legacy implementation.
+
+M0.6 — Acceptance criteria
+
+· M0-AC-1 — No §8 violations, no deferred fundamentals. Every applicable §8 constraint satisfied. Deferrals only where §8 permits, named with target milestone and test; a deferred constraint does not count as satisfied.
+· M0-AC-2 — Canonical model mapping: every E/F/C/D type has an explicit persistence or derivation mechanism.
+· M0-AC-3 — Offline capability coverage, split by mutation and read. State-mutating: durable-intent path. Read-only: named cache/read model + freshness mechanism. Includes §6.3 offline capabilities.
+· M0-AC-4 — CommandOutcome coverage.
+· M0-AC-5 — Canonical F mapping; no parallel fact layer.
+· M0-AC-6 — No second source of truth.
+· M0-AC-7 — Tenancy and Site boundaries enforced structurally, testable before M1.
+· M0-AC-8 — No retroactive reinterpretation required.
+· M0-AC-9 — Declared conflict rules per entity class.
+· M0-AC-10 — Salvage boundary respected.
+
+M0 evidence bundle
+
+```text
+M0/
+├── architecture.md
+├── conceptual-model-mapping.md
+├── persistence-model.md
+├── command-sync-model.md
+├── authorization-scope-model.md
+├── offline-reconciliation-model.md
+├── audit-model.md
+├── salvage-register.md
+├── pending-extractions.md
+├── acceptance-tests/
+└── evidence/
+```
+
+M0 is not
+
+Not implementation. Not architecture in the abstract. Not a redesign opportunity. Not a salvage opportunity. Not partially passable.
+
+Transition to M1
+
+M1 begins only when M0-AC-1 through M0-AC-10 pass. M1 = Identity, Company & Onboarding. Governed by §4, §6.3, §6.11, §7, §8.
+
+---
+
+END OF LOCKED BLUEPRINT v1.0
+
+Blueprint status: FROZEN. No further drafting.
+
+Next artifact: Jenny's M0 architecture document and evidence bundle.
+
+Next action: Audit against M0.3.1–M0.3.18 and M0-AC-1–M0-AC-10. Result is binary: PASS or BLOCKED / FAIL with specific criterion named. No M1 drafting until PASS.
