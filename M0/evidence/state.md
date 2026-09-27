@@ -46,9 +46,24 @@ Migration head remains 20260912000007_m17_sync_uuid_validation_compat.sql
 
 ## Blueprint version
 
-MASTER_BLUEPRINT v1.0 LOCKED (EP-1.0; §7 = v0.7.2 + recorded §6.3/§6.4/§6.9
-catalogue amendments per §M0.1). Blueprint unmodified by M0 — verified:
-`git diff --name-only EP-1.0..HEAD -- MASTER_BLUEPRINT/ KIMI/ EP/` → empty.
+MASTER_BLUEPRINT v1.0 LOCKED. §8.K amended at commit 0eefbd6 to
+identify M0-AC-1 through M0-AC-10 as the operative acceptance
+criteria; §0.1 register updated v0.8.1 → v0.8.2. No other blueprint
+changes.
+
+Blueprint modified only by the human-authorised amendment at
+0eefbd6. Verified no M0 evidence commit touches the governed inputs
+(the range a9f3c85..HEAD contains the EP-2.0 freeze commits, which are
+excluded because they are the authorised amendment, not M0 evidence):
+
+    git log --format=%H a9f3c85..HEAD | grep -vxF \
+      -e 0eefbd642fb369166eb669550d497d63d3be7de1 \
+      -e 7f4fd06934731b63bcc91d21ff5c332240ec78c9 \
+      -e 276c7994b5c0cbfd88ed4d5cb4587a7bd46a0adb \
+      | xargs -I{} git diff-tree --no-commit-id --name-only -r {} \
+      | grep -E '^(MASTER_BLUEPRINT|KIMI|EP|EVIDENCE|sitesync)/'
+
+→ empty
 
 ## Milestone / gate state
 
