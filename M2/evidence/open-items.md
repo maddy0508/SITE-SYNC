@@ -163,3 +163,19 @@ milestones; from the M2 contract)
   command is added to the offline-capable set. The halted M1 AC-11 offline
   path (AMB-002, resolved) is unaffected.
 - **Reporting aggregation across Sites** — M9 (contract §In-scope #10).
+## Legacy scope-test policy (A + C) — governance decision, 2026-09-28
+
+Option A — Frozen-snapshot policy.
+  Accepted milestone suites are frozen at their close SHA.
+  Regression verification for prior milestones uses a snapshot
+  runner that checks out the milestone-close SHA rather than
+  running their tests at later HEADs.
+
+Option C — Explicit commit enumeration.
+  Future milestone scope-check tests (M3+) must use explicit
+  commit enumeration, never `baseline..HEAD` range operators.
+
+Existing M0/M1 scope-check tests that use open-ended ranges
+are not maintained at later HEADs and are not expected to
+pass. Their verification at their own close SHA remains
+authoritative.
