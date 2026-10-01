@@ -28,11 +28,14 @@ const baseline = git('rev-parse cfda19f^{commit}');
 // implementation. They are excluded by literal SHA. The assertion is
 // unchanged: only M2-authorised changes may appear in the delta.
 const EP5_FREEZE = new Set(['0d43b43', '1893ab3', '00c2adb'].map((s) => git(`rev-parse ${s}`)));
+// EP-6.0 freeze commits (phase 2; blueprint amendment resolving
+// AMB-003/004/005 + manifest + lock) — same exclusion category.
+const EP6_FREEZE = new Set(['af06026', 'cebd4ae', 'a764d4f'].map((s) => git(`rev-parse ${s}`)));
 // Also excluded, disclosed separately beyond the contract's template: the
 // M1 gate-acceptance commit f8fe895 (touches M1/evidence/state.md only) sits
 // inside the range cfda19f..HEAD and is governance, not M2 implementation.
 const GOVERNANCE = new Set(['f8fe895'].map((s) => git(`rev-parse ${s}`)));
-const EXCLUDED = new Set([...EP5_FREEZE, ...GOVERNANCE]);
+const EXCLUDED = new Set([...EP5_FREEZE, ...EP6_FREEZE, ...GOVERNANCE]);
 const commits = git(`log --format=%H ${baseline}..HEAD`).split('\n').filter(Boolean).filter((c) => !EXCLUDED.has(c));
 const changed = new Set();
 for (const c of commits) {
@@ -68,8 +71,8 @@ const PROHIBITED = [
   // C-class configuration (not in M2 scope)
   'SiteShiftBoundaryConfig', 'CompanyOnboardingConfig', 'ProjectOnboardingConfig', 'SiteOnboardingConfig',
   'RoleCapability', 'CompanyBrandConfig',
-  // Transfer is BLOCKED pending AMB-003: no transfer machinery of any kind.
-  'TransferEvent',
+  // TransferEvent removed from this list at EP-6.0: AMB-003 resolved,
+  // transfer is in M2 phase-2 scope (§6.1.3 amended).
 ];
 
 function* sourceFiles(dir) {
@@ -95,11 +98,15 @@ if (!absent) {
   }
 
   // 3. Runtime catalogue: the M2 command surface is exactly the M2
-  // vocabulary — nothing M3+, nothing for transfer.
+  // vocabulary — nothing M3+. Phase-2 commands (EP-6.0, AMB-003/004/005
+  // resolved): SuspendSite/UnsuspendSite, TransferProject,
+  // OptOutSiteRequirement/RevokeSiteRequirementOptOut.
   const m2 = await import(`${SRC_DIR}/domain.js`);
   const EXPECTED_COMMANDS = new Set([
     'ActivateProject', 'SuspendProject', 'ResumeProject', 'CompleteProject', 'ArchiveProject', 'CancelProject',
     'MobiliseSite', 'ActivateSite', 'DemobiliseSite', 'CloseSite', 'ArchiveSite',
+    'SuspendSite', 'UnsuspendSite', 'TransferProject',
+    'OptOutSiteRequirement', 'RevokeSiteRequirementOptOut',
     'ActivateAssignment', 'PauseAssignment', 'ResumeAssignment', 'RemoveAssignment',
     'CreateExternalParty', 'UpdateExternalParty', 'ArchiveExternalParty',
     'AssociateExternalParty', 'RemoveProjectExternalParty',
