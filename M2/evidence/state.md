@@ -1,12 +1,18 @@
 # M2 State
 
 - **Milestone:** M2 — Project & Site lifecycle, suspension overlay,
-  assignment states, ExternalParty / ProjectExternalParty, HandoverRecord.
-- **Operative EP:** EP-5.0 (lock commit
-  `00c2adbed0fa91be136c76029267d88dbacff583`; tag object `5075aa1b…`).
+  assignment states, ExternalParty / ProjectExternalParty, HandoverRecord;
+  phase 2 (EP-6.0): independent Site operational suspension, Project
+  transfer, Site opt-out from project-scope Requirements.
+- **Operative EP (at close):** EP-6.0 (lock commit
+  `a764d4f563ca95f6cb0d42d1565b62373d1e1564`; tag object
+  `e81c8c3bd5d2635c6c8f4fe19efc083658672a2b` → `a764d4f`; blueprint amended,
+  AMB-003/004/005 resolved). Historical: EP-5.0 (lock commit
+  `00c2adbed0fa91be136c76029267d88dbacff583`; tag object
+  `5075aa1b8429a9c9e5586bad90d0d109a48adefc` → `00c2adb`) — superseded.
 - **M2-start baseline:** `cfda19f` (M1 final evidence commit).
-- **HEAD at this record:** `ed59903` (T2). This file is added by the
-  following evidence commit (E2); the final M2 evidence head is that
+- **HEAD at this record:** `da983aa` (T4). This file is updated by the
+  following evidence commit (E3); the final M2 evidence head is that
   commit's SHA — see `git log`.
 - **Commit sequence (INV-C):**
   - T1 `6134b22` — acceptance tests AC-1..15 test-first + lib + runner.
@@ -18,17 +24,32 @@
     3 sentinels PASS (halts intact).
   - T2 `ed59903` — AC-15 freeze-whitelist (mechanical; chronology disclosed
     in acceptance-map.md). AC-15 PASS.
+  - T3 `b872cf6` — phase-2 tests for AC-5/8/11 test-first under EP-6.0
+    (sentinels replaced by substantive tests). Baseline run: 11/15 (the
+    three new tests FAIL on unknown command type — designed
+    ABSENT-equivalent; AC-15 FAIL on unwhitelisted EP-6.0 freeze commits —
+    designed pre-whitelist condition). Verbatim output in
+    acceptance-map.md.
+  - I2 `35c99af` — phase-2 implementation: SiteOperationalSuspension
+    (SuspendSite/UnsuspendSite), TransferProject (system actor, AMB-003
+    option C), SiteRequirementOptOut (OptOut/Revoke); derivations fold both
+    new F streams. AC-5/8/11 PASS; twelve phase-1 tests still PASS;
+    ancestry verified.
+  - T4 `da983aa` — AC-15 EP-6.0 freeze-whitelist + catalogue (mechanical;
+    chronology disclosed in acceptance-map.md). AC-15 PASS.
+  - E3 — AMB resolutions recorded; evidence updated (this commit).
 - **CI status:** none configured for this repository (local execution
-  environment). Recorded local runs: M2 suite 15/15 (exit 0); adversarial
-  14/14 (exit 0); M1 behavioural regression 13/13 (m1-ac-14 diff-scope
-  failure disclosed in acceptance-map.md — post-milestone range pollution,
-  same construction as m0-ac-10 after M1).
+  environment). Recorded local runs: M2 suite 15/15 (exit 0, phase 2, all
+  substantive); adversarial 17/17 (exit 0); M1 behavioural regression 13/13
+  (m1-ac-14 diff-scope failure disclosed in acceptance-map.md —
+  post-milestone range pollution, same construction as m0-ac-10 after M1).
 - **Migration head:** none. The reference core is in-memory
   (E/F/D/C classes in a store object); M2 introduces no migrations or
   schema files.
-- **Gate result:** BLOCKED — M2-AC-5 (AMB-004), M2-AC-8 (AMB-003),
-  M2-AC-11 (AMB-005) halted per contract; all other criteria PASS.
-  M2 PASS is not declared; the human accepts or rejects the gate.
+- **Gate result:** all fifteen acceptance criteria verified PASS (AC-5/8/11
+  under EP-6.0 after AMB resolution; the twelve phase-1 criteria verified
+  at EP-5.0 and still PASS in the phase-2 final run). M2 PASS is not
+  declared; the human accepts or rejects the gate.
 
 ## M2 implementation decisions (with anchors)
 
@@ -66,6 +87,30 @@
 9. **Reason discipline**: mandatory exactly at §6.11.6 (project
    suspension), §6.3.6 (assignment removal), §6.1.3 (closure cascade, fixed
    "site closure"); never fabricated elsewhere. Anchor: §6.1.6, §7.8.
+
+### Phase-2 implementation decisions (EP-6.0; AMB-003/004/005 resolved)
+
+10. **System actor for TransferProject** — Platform Admin surface (§6.11);
+    `ctx.actor = { kind: 'system' }` (M1 precedent). Tenancy checks do not
+    apply to the transfer itself (it crosses Companies by design); the
+    transfer payload references (source Project, receiving Company) are
+    validated for existence, and a same-Company destination is rejected.
+    Probe Q12.
+11. **Stream independence** — the Project overlay and the
+    SiteOperationalSuspension stream are folded independently in
+    `siteOperationalStatus`; neither derivation writes to the other and a
+    Project resume cannot lift an independent suspension (M2-AC-5b).
+12. **Copy semantics on transfer** — copied Sites/Requirements are genesis
+    records (new identities, entry states `planned`/fresh `groupId`), not
+    fact-carried history; the source records, being deep-frozen, cannot
+    change, so "source unchanged" is structural. TransferEvent is the sole
+    cross-Company linkage (F record, §7.3-catalogued).
+13. **Opt-out scope guard** — OptOutSiteRequirement admits only
+    project-scope Requirements of the Site's own Project; revocation
+    requires an active opt-out. Probe Q16.
+14. **Reason discipline (phase 2)** — mandatory on SiteOperationalSuspension
+    and SiteRequirementOptOut facts (§6.1.3 amended) and on the transfer
+    removal cascade (fixed "project transfer").
 
 ## M0/M1 architecture refinement requested
 

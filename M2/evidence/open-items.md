@@ -1,13 +1,20 @@
 # M2 Open Items
 
-Operative contract: KIMI/MILESTONES/M2_EXECUTION_CONTRACT.md v1.0.3 (EP-5.0,
-commit `0d43b43`). Raised dates use the repository clock (UTC).
+Operative contract: KIMI/MILESTONES/M2_EXECUTION_CONTRACT.md v1.0.3
+(installed at EP-5.0, commit `0d43b43`; blueprint amended at EP-6.0, lock
+commit `a764d4f` — AMB-003/004/005 resolved). Raised dates use the
+repository clock (UTC).
 
 ---
 
-## AMB-003: OPEN — Transfer across Company-scoped Worker identities
+## AMB-003: RESOLVED — Transfer across Company-scoped Worker identities
 
-**Status: OPEN. Blocker: yes.**
+**Status: RESOLVED.**
+Resolution date: 2026-09-28.
+Resolved by: Maddy McKellar.
+Mechanism: EP-6.0 cut and tagged (supersedes EP-5.0).
+Decision (verbatim): "AMB-003/004/005 decision: Path 1 — blueprint
+amendment, then EP-6.0."
 Raised: 2026-09-27 (executor; formalises the contract's pre-identified
 draft ambiguity #1 — "The executor is not required to rediscover ambiguities
 already identified in this section").
@@ -36,18 +43,31 @@ models invents blueprint semantics ("Do not reinterpret the blueprint";
 contract directs: raise AMB-003 and halt M2-AC-8 rather than select a
 transfer model.
 
-**Affected scope (halted).** M2-AC-8 (Project transfer). No transfer
-command, TransferEvent, or successor linkage exists in M2. Halt integrity
-is continuously verified by the sentinel `m2-ac-08.test.mjs` (source scan +
-runtime unknown-command probe). The derivable sub-properties listed in the
-contract remain specified-but-unimplemented and become verification
-obligations when AMB-003 is resolved.
+**Resolution detail.** The blueprint was amended at EP-6.0 (commit
+`af06026`, §6.1.3 Transfer paragraph): transfer creates a new Project
+record with a new identity under the receiving Company; Sites and
+Project/Site-scoped Requirements are copied as new identities; existing
+ProjectAssignments and SiteAssignments on the source Project are marked
+`removed` with reason `project transfer`; no assignments are copied;
+Company-scoped Requirements remain with the source Company; historical
+attendance/evidence/QA/progress records remain with the source Project; a
+TransferEvent references both Project identities. Site-level transfer is
+not permitted. §7.3 F-entity catalogue amended accordingly.
+
+**Affected scope (halt lifted).** M2-AC-8 implemented at phase-2 commit
+`35c99af` (test-first at `b872cf6`; ancestry verified) and verified PASS
+by `m2-ac-08.test.mjs` under EP-6.0.
 
 ---
 
-## AMB-004: OPEN — Independent Site operational suspension representation
+## AMB-004: RESOLVED — Independent Site operational suspension representation
 
-**Status: OPEN. Blocker: yes.**
+**Status: RESOLVED.**
+Resolution date: 2026-09-28.
+Resolved by: Maddy McKellar.
+Mechanism: EP-6.0 cut and tagged (supersedes EP-5.0).
+Decision (verbatim): "AMB-003/004/005 decision: Path 1 — blueprint
+amendment, then EP-6.0."
 Raised: 2026-09-27 (executor; formalises the contract's pre-identified
 draft ambiguity #2).
 
@@ -76,18 +96,30 @@ second portion).
 representations produce different observable behaviour (event streams,
 resume semantics, audit content). Choosing one invents domain semantics.
 
-**Affected scope (halted).** M2-AC-5 (Resume semantics) — the
-independent-suspension portion. No partial PASS is permitted by the
-contract, so M2-AC-5 cannot PASS until AMB-004 is resolved. The overlay
-portion (M2-AC-4) is independent and PASSes. Halt integrity is continuously
-verified by the sentinel `m2-ac-05.test.mjs` (no independent-suspension
-command, fact type, or stored flag exists in the M2 core).
+**Resolution detail.** The blueprint was amended at EP-6.0 (commit
+`af06026`, §6.1.3): independent Site operational suspension is an F-class
+`SiteOperationalSuspension` fact with subtype events `activated` /
+`deactivated`; actor, timestamp, and reason are mandatory; the Site's
+operational status is derived from the fact stream (DM-INV-3 preserved —
+no stored status); the Project overlay and the independent stream are
+independent, so a Project resume never lifts an independent suspension.
+§7.3 F-entity catalogue amended accordingly.
+
+**Affected scope (halt lifted).** M2-AC-5 implemented at phase-2 commit
+`35c99af` (test-first at `b872cf6`; ancestry verified) and verified PASS
+by `m2-ac-05.test.mjs` under EP-6.0. The overlay portion (M2-AC-4) remains
+independent and PASSing.
 
 ---
 
-## AMB-005: OPEN — Requirement-scope opt-out mechanism
+## AMB-005: RESOLVED — Requirement-scope opt-out mechanism
 
-**Status: OPEN. Blocker: yes.**
+**Status: RESOLVED.**
+Resolution date: 2026-09-28.
+Resolved by: Maddy McKellar.
+Mechanism: EP-6.0 cut and tagged (supersedes EP-5.0).
+Decision (verbatim): "AMB-003/004/005 decision: Path 1 — blueprint
+amendment, then EP-6.0."
 Raised: 2026-09-27 (executor; formalises the contract's pre-identified
 draft ambiguity #3).
 
@@ -109,10 +141,18 @@ exclusion list, Site-scope override Requirement, applicability flag)
 invents blueprint semantics and changes readiness outcomes. The M2 contract
 directs: raise AMB-005 and halt M2-AC-11 rather than invent a mechanism.
 
-**Affected scope (halted).** M2-AC-11 (Requirement scope precedence). No
-partial PASS is permitted. Halt integrity is continuously verified by the
-sentinel `m2-ac-11.test.mjs` (default-apply rule live; no opt-out artifact
-in the M2 core).
+**Resolution detail.** The blueprint was amended at EP-6.0 (commit
+`af06026`, §6.1.3 "Site-scope opt-out" paragraph): a Site may opt out of a
+Project-scope Requirement; the opt-out is an F-class
+`SiteRequirementOptOut` fact referencing the Project-scope Requirement,
+with actor, timestamp, and reason; a Site with an active
+`SiteRequirementOptOut` for a Requirement is not bound by it for readiness
+derivation (§4.4); applicability is derived from the fact stream. §7.3
+F-entity catalogue amended accordingly.
+
+**Affected scope (halt lifted).** M2-AC-11 implemented at phase-2 commit
+`35c99af` (test-first at `b872cf6`; ancestry verified) and verified PASS
+by `m2-ac-11.test.mjs` under EP-6.0.
 
 ---
 
@@ -151,8 +191,9 @@ milestones; from the M2 contract)
   CloseSite has no shift model to check; the obligation attaches when
   attendance exists.
 - **Transfer preserves historical attendance / evidence / QA / progress
-  with the source Project** (§6.1.3) — M6, M7, M8 (and blocked regardless
-  pending AMB-003).
+  with the source Project** (§6.1.3, amended at EP-6.0) — M6, M7, M8. The
+  AMB-003 blocker lifted at EP-6.0; the deferral itself is unchanged (those
+  record types do not exist until M6/M7/M8).
 - **Full handover freeze scope** (§6.1.3) — M3+. Facts from later-milestone
   domains become additional freeze-scope obligations in their milestones.
 

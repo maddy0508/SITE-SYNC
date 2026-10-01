@@ -1,26 +1,36 @@
 # M2 Adversarial Audit (Skill 07)
 
 Executable probes: `M2/evidence/adversarial-probes.mjs`
-Run at implementation commit `891fa7a` (I1):
+Run at implementation commit `891fa7a` (I1) — Q1–Q14; re-run at phase-2
+implementation commit `35c99af` (I2) — Q1–Q17 (Q12 rewritten for the
+EP-6.0 transfer surface; Q15–Q17 added):
 
 ```
 $ node M2/evidence/adversarial-probes.mjs
-PROBE Q1 PASS  cross-tenant M2 writes rejected (6/6: true); storage reads bounded (true)
-PROBE Q2 PASS  re-association and re-assignment create new identities; removed records persist unreactivated (§7.5)
-PROBE Q3 PASS  E genesis / HandoverRecord / LifecycleEvent / snapshot-nested arrays all deep-frozen (mutation attempts threw: 4/4)
-PROBE Q4 PASS  M2 entities store no status (true); lifecycle/overlay/assignment state recompute from facts (draft→active→suspended; project genesis untouched: true)
-PROBE Q5 PASS  offline-capable set unchanged (AcknowledgeRequirement); M2 command offline attempt locally rejected, nothing queued (true)
-PROBE Q6 PASS  duplicate delivery and commandId reuse replay the recorded outcome; one suspension event; no reapplication
-PROBE Q7 PASS  same-field updates: both facts recorded, later value derived; competing lifecycle intent rejected with audited outcome
-PROBE Q8 PASS  one CommandOutcome per command (true); receipts exactly on accepts (true); M2 genesis records trace to receipted commands (true)
-PROBE Q9 PASS  commandOutcomes index exactly mirrors CommandOutcome facts for M2 + M1 commands (both directions)
+PROBE Q1 PASS cross-tenant M2 writes rejected (6/6: true); storage reads bounded (true)
+PROBE Q2 PASS re-association and re-assignment create new identities; removed records persist unreactivated (§7.5)
+PROBE Q3 PASS E genesis / HandoverRecord / LifecycleEvent / snapshot-nested arrays all deep-frozen (mutation attempts threw: 4/4)
+PROBE Q4 PASS M2 entities store no status (true); lifecycle/overlay/assignment state recompute from facts (draft→active→suspended; project genesis untouched: true)
+PROBE Q5 PASS offline-capable set unchanged (AcknowledgeRequirement); M2 command offline attempt locally rejected, nothing queued (true)
+PROBE Q6 PASS duplicate delivery and commandId reuse replay the recorded outcome; one suspension event; no reapplication
+PROBE Q7 PASS same-field updates: both facts recorded, later value derived; competing lifecycle intent rejected with audited outcome
+PROBE Q8 PASS one CommandOutcome per command (true); receipts exactly on accepts (true); M2 genesis records trace to receipted commands (true)
+PROBE Q9 PASS commandOutcomes index exactly mirrors CommandOutcome facts for M2 + M1 commands (both directions)
 PROBE Q10 PASS M2 exports exactly the derivations + execute (10 exports); no cache/offline-read surface introduced
 PROBE Q11 PASS archive terminal (EP update/double-archive/site reopen rejected); closure cascade recorded; zero entities deleted
-PROBE Q12 PASS no transfer command/fact/vocabulary exists while AMB-003 is unresolved (provenance mechanism unimplementable by design)
+PROBE Q12 PASS transfer is system-only (company_admin rejected: true); bad refs/self-transfer rejected; TransferEvent links old→new (true); source genesis byte-identical (true); replay adds no second TransferEvent (true)
 PROBE Q13 PASS overlay derives from the Project stream alone: no Site facts (true), Site genesis byte-identical (true), resume clears it
 PROBE Q14 PASS frozen record byte-identical after lifecycle/assignment/requirement change (true); later handover is a new point-in-time record (true)
+PROBE Q15 PASS reason mandatory (true); unsuspend-without-active and double-suspend rejected; fact frozen (true); project suspend/resume does not lift the independent stream (true)
+PROBE Q16 PASS opt-out is project-scope-only (site/company-scope rejected); cross-project opt-out rejected; revoke-without-active and duplicate rejected; reason mandatory; fact frozen
+PROBE Q17 PASS no receiving-side entity references a source entity (true); storage reads bounded both directions (true)
 ALL PROBES PASS (exit 0)
 ```
+
+(Phase-1 run at `891fa7a`: Q1–Q14, ALL PROBES PASS, exit 0 — Q12 then
+asserted the AMB-003 halt, i.e. that no transfer machinery existed. That
+assertion was retired when AMB-003 was resolved at EP-6.0; Q12 now probes
+the transfer surface itself.)
 
 | # | Area (contract minimum) | Attack | Result | Disposition |
 |---|---|---|---|---|
@@ -35,16 +45,20 @@ ALL PROBES PASS (exit 0)
 | Q9 | second source of truth | Compare the `commandOutcomes` index against CommandOutcome facts in both directions | Exact correspondence | No vulnerability. The index is a derived lookup, not a shadow store (M1 P17 analogue, now covering M2 commands). |
 | Q10 | offline reads | Enumerate M2 exports for cache/snapshot-read surfaces | Exports are exactly the derivations + execute + command catalogue; none | No vulnerability. M2 adds no offline-read surface; M1's freshness model (M1 P18) is unaffected. |
 | Q11 | archive/retention | Update/double-archive an archived ExternalParty; reopen an archived Site; count entities before/after | All rejected; zero entities deleted; closure cascade recorded as facts | No vulnerability. Terminal states are terminal; retention is append-only (destruction is Platform scope, later). |
-| Q12 | transfer provenance | Issue TransferProject; scan fact vocabulary and command catalogue for transfer machinery | Unknown command rejection; no transfer artifact exists | Halt intact (AMB-003). Provenance mechanism deliberately unimplemented; sentinel `m2-ac-08` keeps this under test. |
+| Q12 | transfer authority / provenance (phase 2, EP-6.0) | Drive TransferProject as company_admin; system actor with unknown Project/Company refs; self-transfer; freeze-check source genesis; replay with reused commandId | Worker-actor transfer rejected (system-only surface); bad refs and same-Company destination rejected; TransferEvent links old→new; source genesis byte-identical; replay produces no second TransferEvent | No vulnerability. §6.11 Platform Admin surface enforced; provenance link mandatory; idempotent replay holds on the system path. (Phase-1 form asserted the AMB-003 halt; retired at EP-6.0.) |
+| Q15 | independent suspension discipline (phase 2, EP-6.0) | SuspendSite without reason; UnsuspendSite with no active suspension; double SuspendSite; mutate the fact; project suspend/resume over an independently suspended Site | All rejected except the single valid activation; fact frozen; project overlay cycle does not lift the independent stream; lifecycle state untouched | No vulnerability. §6.1.3 amended: mandatory reason, activated/deactivated discipline, stream independence (M2-AC-5b). |
+| Q16 | opt-out guard rails (phase 2, EP-6.0) | Opt out of site-scope and company-scope Requirements; opt out of another Project's Requirement; revoke with no active opt-out; duplicate opt-out; omit reason; mutate the fact | All rejected; only the valid activation recorded; fact frozen | No vulnerability. Opt-out is project-scope-only and applicability-bound; revocation requires an active opt-out (M2-AC-11). |
+| Q17 | transfer tenancy (phase 2, EP-6.0) | Full transfer; scan every receiving-Company entity for references to source-Company entity ids; storage-layer reads both directions | No receiving-side entity references any source entity; readForCompany returns null both directions | No vulnerability. AC-ARCH-B3 / DM-INV-5 hold across the transfer boundary. |
 | Q13 | suspension overlay derivation | Suspend a Project; inspect Site facts, Site genesis bytes, underlying state; resume | No SiteLifecycleEvent; Site genesis byte-identical; underlying state intact; overlay clears on resume | No vulnerability. Overlay is D-class derivation from the Project stream alone (M2-AC-4). Independent Site suspension remains halted (AMB-004). |
 | Q14 | handover snapshot immutability | Mutate lifecycle, assignments, and Requirements after a handover; compare the frozen record; take a second handover | Frozen record byte-identical (`active` stays `active`); second handover is a new point-in-time record | No vulnerability. M2-AC-9's named case holds. |
 
 ## Notes
 
-- Probes Q5/Q10/Q12 are negative-surface probes: they verify that halted or
-  out-of-scope machinery does **not** exist. They complement the halt
-  sentinels (`m2-ac-05/08/11`), which continuously verify the same halts in
-  the acceptance suite.
+- Probes Q5/Q10 are negative-surface probes: they verify that out-of-scope
+  machinery does **not** exist. (Q12 was a negative-surface halt probe in
+  phase 1; the halts it guarded were lifted by the EP-6.0 blueprint
+  amendment, and the phase-1 halt sentinels `m2-ac-05/08/11` were replaced
+  by the real acceptance tests at `b872cf6`.)
 - No salvage was consulted or promoted for any M2 behavior (zero
   promotions, per the M2 contract).
 - M1 inheritance: Q5/Q9/Q10 exercise shared plumbing (queue, outcomes,

@@ -248,14 +248,29 @@ function boot() {
   probe('Q11', ok, 'archive terminal (EP update/double-archive/site reopen rejected); closure cascade recorded; zero entities deleted');
 }
 
-// --- Q12: transfer provenance (halt intact; AMB-003) ---
+// --- Q12: transfer authority and provenance (EP-6.0; AMB-003 resolved) ---
 {
-  const { s } = boot();
-  const r = m2.execute(s, { type: 'TransferProject', actor: { system: true }, payload: {} });
-  const noTransferFacts = !s.facts.some((f) => /transfer/i.test(f.type));
-  const noTransferCommands = !m2.M2_COMMAND_TYPES.some((c) => /transfer/i.test(c));
-  const ok = r.outcome === 'server rejected' && /unknown command type/.test(r.reason ?? '') && noTransferFacts && noTransferCommands;
-  probe('Q12', ok, 'no transfer command/fact/vocabulary exists while AMB-003 is unresolved (provenance mechanism unimplementable by design)');
+  const { s, companyA, companyB, adminA, project } = boot();
+  const A = { workerId: adminA.id };
+  // company_admin (even the source Company's) cannot drive transfer:
+  // Platform Admin (system) surface only.
+  const byAdmin = m2.execute(s, { type: 'TransferProject', actor: A, payload: { projectId: project.id, toCompanyId: companyB.id } });
+  const badProject = m2.execute(s, { type: 'TransferProject', actor: { system: true }, payload: { projectId: 'ent-nope', toCompanyId: companyB.id } });
+  const badCompany = m2.execute(s, { type: 'TransferProject', actor: { system: true }, payload: { projectId: project.id, toCompanyId: 'ent-nope' } });
+  const sameCo = m2.execute(s, { type: 'TransferProject', actor: { system: true }, payload: { projectId: project.id, toCompanyId: companyA.id } });
+  const genesisJson = JSON.stringify(project);
+  const r = m2.execute(s, { type: 'TransferProject', actor: { system: true }, payload: { projectId: project.id, toCompanyId: companyB.id } });
+  const tev = s.facts.find((f) => f.type === 'TransferEvent');
+  const links = !!tev && tev.payload.fromProjectId === project.id && typeof tev.payload.toProjectId === 'string';
+  const sourceUntouched = JSON.stringify(project) === genesisJson;
+  const dup = m2.execute(s, { type: 'TransferProject', commandId: r.commandId, actor: { system: true }, payload: { projectId: project.id, toCompanyId: companyB.id } });
+  const oneEvent = s.facts.filter((f) => f.type === 'TransferEvent').length === 1;
+  const ok = byAdmin.outcome === 'server rejected'
+    && badProject.outcome === 'server rejected' && badCompany.outcome === 'server rejected'
+    && sameCo.outcome === 'server rejected'
+    && r.outcome === 'server accepted' && links && sourceUntouched
+    && dup.duplicate === true && oneEvent;
+  probe('Q12', ok, `transfer is system-only (company_admin rejected: ${byAdmin.outcome === 'server rejected'}); bad refs/self-transfer rejected; TransferEvent links old→new (${links}); source genesis byte-identical (${sourceUntouched}); replay adds no second TransferEvent (${oneEvent})`);
 }
 
 // --- Q13: suspension overlay derivation (D-class; §6.1.3) ---
@@ -298,6 +313,82 @@ function boot() {
     && ho2.payload.snapshot.assignments.length === 0
     && ho2.payload.snapshot.requirements.length === 1;
   probe('Q14', unchanged && pointInTime, `frozen record byte-identical after lifecycle/assignment/requirement change (${unchanged}); later handover is a new point-in-time record (${pointInTime})`);
+}
+
+// --- Q15: independent suspension fact discipline (EP-6.0; AMB-004) ---
+{
+  const { s, adminA, project, site } = boot();
+  const A = { workerId: adminA.id };
+  m2.execute(s, { type: 'ActivateProject', actor: A, payload: { projectId: project.id } });
+  m2.execute(s, { type: 'MobiliseSite', actor: A, payload: { siteId: site.id } });
+  m2.execute(s, { type: 'ActivateSite', actor: A, payload: { siteId: site.id } });
+  const noReason = m2.execute(s, { type: 'SuspendSite', actor: A, payload: { siteId: site.id } });
+  const unsuspendFirst = m2.execute(s, { type: 'UnsuspendSite', actor: A, payload: { siteId: site.id, reason: 'x' } });
+  m2.execute(s, { type: 'SuspendSite', actor: A, payload: { siteId: site.id, reason: 'q15' } });
+  const dbl = m2.execute(s, { type: 'SuspendSite', actor: A, payload: { siteId: site.id, reason: 'again' } });
+  const fact = s.facts.find((f) => f.type === 'SiteOperationalSuspension');
+  let frozen = false;
+  try { fact.reason = 'mutated'; } catch { frozen = true; }
+  // A project suspension + resume must not lift the independent stream.
+  m2.execute(s, { type: 'SuspendProject', actor: A, payload: { projectId: project.id, reason: 'q15' } });
+  m2.execute(s, { type: 'ResumeProject', actor: A, payload: { projectId: project.id } });
+  const stillSuspended = m2.siteOperationalStatus(s, site.id).operational === 'suspended';
+  const lifecycleUntouched = m2.siteLifecycleState(s, site.id) === 'active';
+  const ok = noReason.outcome === 'server rejected' && unsuspendFirst.outcome === 'server rejected'
+    && dbl.outcome === 'server rejected' && frozen && stillSuspended && lifecycleUntouched
+    && s.facts.filter((f) => f.type === 'SiteOperationalSuspension').length === 1;
+  probe('Q15', ok, `reason mandatory (${noReason.outcome === 'server rejected'}); unsuspend-without-active and double-suspend rejected; fact frozen (${frozen}); project suspend/resume does not lift the independent stream (${stillSuspended})`);
+}
+
+// --- Q16: opt-out guard rails (EP-6.0; AMB-005) ---
+{
+  const { s, companyA, adminA, project, site } = boot();
+  const A = { workerId: adminA.id };
+  const mkReq = (payload) => {
+    const before = new Set([...s.entities.values()].filter((e) => e.type === 'Requirement').map((e) => e.id));
+    m1.execute(s, { type: 'CreateRequirement', actor: A, payload });
+    return [...s.entities.values()].find((e) => e.type === 'Requirement' && !before.has(e.id));
+  };
+  const pReq = mkReq({ scope: 'project', projectId: project.id, reqType: 'induction', title: 'P', appliesTo: { kind: 'all_workers' }, requiresVerification: false, expiry: { kind: 'none' } });
+  const sReq = mkReq({ scope: 'site', siteId: site.id, reqType: 'induction', title: 'S', appliesTo: { kind: 'all_workers' }, requiresVerification: false, expiry: { kind: 'none' } });
+  const cReq = mkReq({ scope: 'company', companyId: companyA.id, reqType: 'acknowledgement', title: 'C', appliesTo: { kind: 'all_workers' }, requiresVerification: false, expiry: { kind: 'none' } });
+  m1.execute(s, { type: 'CreateProject', actor: A, payload: { companyId: companyA.id, name: 'P2' } });
+  const project2 = [...s.entities.values()].filter((e) => e.type === 'Project').at(-1);
+  const otherPReq = mkReq({ scope: 'project', projectId: project2.id, reqType: 'induction', title: 'P2', appliesTo: { kind: 'all_workers' }, requiresVerification: false, expiry: { kind: 'none' } });
+  const noReason = m2.execute(s, { type: 'OptOutSiteRequirement', actor: A, payload: { siteId: site.id, requirementId: pReq.id } });
+  const siteScope = m2.execute(s, { type: 'OptOutSiteRequirement', actor: A, payload: { siteId: site.id, requirementId: sReq.id, reason: 'x' } });
+  const companyScope = m2.execute(s, { type: 'OptOutSiteRequirement', actor: A, payload: { siteId: site.id, requirementId: cReq.id, reason: 'x' } });
+  const wrongProject = m2.execute(s, { type: 'OptOutSiteRequirement', actor: A, payload: { siteId: site.id, requirementId: otherPReq.id, reason: 'x' } });
+  const revokeNone = m2.execute(s, { type: 'RevokeSiteRequirementOptOut', actor: A, payload: { siteId: site.id, requirementId: pReq.id, reason: 'x' } });
+  m2.execute(s, { type: 'OptOutSiteRequirement', actor: A, payload: { siteId: site.id, requirementId: pReq.id, reason: 'q16' } });
+  const dup = m2.execute(s, { type: 'OptOutSiteRequirement', actor: A, payload: { siteId: site.id, requirementId: pReq.id, reason: 'again' } });
+  const fact = s.facts.find((f) => f.type === 'SiteRequirementOptOut');
+  let frozen = false;
+  try { fact.payload.requirementId = 'mutated'; } catch { frozen = true; }
+  const ok = noReason.outcome === 'server rejected' && siteScope.outcome === 'server rejected'
+    && companyScope.outcome === 'server rejected' && wrongProject.outcome === 'server rejected'
+    && revokeNone.outcome === 'server rejected' && dup.outcome === 'server rejected' && frozen;
+  probe('Q16', ok, 'opt-out is project-scope-only (site/company-scope rejected); cross-project opt-out rejected; revoke-without-active and duplicate rejected; reason mandatory; fact frozen');
+}
+
+// --- Q17: transfer leaves no cross-tenant operational reference (EP-6.0) ---
+{
+  const { s, companyA, companyB, adminA, project } = boot();
+  const A = { workerId: adminA.id };
+  m2.execute(s, { type: 'TransferProject', actor: { system: true }, payload: { projectId: project.id, toCompanyId: companyB.id } });
+  const tev = s.facts.find((f) => f.type === 'TransferEvent');
+  const srcIds = new Set([...s.entities.values()].filter((e) => e.companyId === companyA.id).map((e) => e.id));
+  let leak = false;
+  for (const e of s.entities.values()) {
+    if (e.companyId !== companyB.id) continue;
+    for (const [k, v] of Object.entries(e)) {
+      if (k === 'id' || k === 'companyId') continue;
+      if (typeof v === 'string' && srcIds.has(v)) leak = true;
+    }
+  }
+  const readsBounded = m1.readForCompany(s, companyA.id, tev.payload.toProjectId) === null
+    && m1.readForCompany(s, companyB.id, project.id) === null;
+  probe('Q17', !leak && readsBounded, `no receiving-side entity references a source entity (${!leak}); storage reads bounded both directions (${readsBounded})`);
 }
 
 console.log(failures === 0 ? 'ALL PROBES PASS (exit 0)' : `${failures} PROBE(S) FAILED`);
