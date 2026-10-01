@@ -10,23 +10,32 @@
 // records deep-frozen at creation, F records immutable and append-only,
 // D values derived, C vocabulary fixed.
 //
-// Halted scope (see M2/evidence/open-items.md; sentinels m2-ac-05/08/11):
-// - Project transfer: BLOCKED pending AMB-003 (M2-AC-8). No transfer
-//   machinery exists here.
-// - Independent Site operational suspension: BLOCKED pending AMB-004
-//   (M2-AC-5). The only suspension representation is the Project overlay
-//   (D-class derivation, AC-4).
-// - Site-scope opt-out from project-scope Requirements: BLOCKED pending
-//   AMB-005 (M2-AC-11). Project-scope Requirements apply to all contained
-//   Sites by default; no opt-out mechanism is invented.
+// Phase-2 scope (AMB-003/004/005 resolved at EP-6.0, blueprint amended;
+// see M2/evidence/open-items.md):
+// - Independent Site operational suspension (AMB-004): F-class
+//   SiteOperationalSuspension facts with subtype events
+//   activated/deactivated; actor, timestamp, and reason mandatory. The
+//   operational status derivation folds this stream alongside the Project
+//   overlay (AC-5).
+// - Project transfer (AMB-003, option C): TransferProject (Platform Admin
+//   / system actor) creates a new Project identity under the receiving
+//   Company, copies Sites and Project/Site-scoped Requirements as new
+//   identities, marks source assignments removed with reason
+//   "project transfer", copies no assignments, and records a TransferEvent
+//   linking both Project identities (AC-8).
+// - Site opt-out from project-scope Requirements (AMB-005): F-class
+//   SiteRequirementOptOut facts (activated/deactivated) with mandatory
+//   reason; an active opt-out unbinds that Requirement from that Site for
+//   readiness derivation (AC-11).
 //
 // Offline: no M2 command is offline-capable (§6.10.2 classifies
 // structural/administrative commands as connectivity-required).
 //
 // Event vocabulary (AC-ARCH-I3): §7.3-catalogued types only —
-// ProjectLifecycleEvent, SiteLifecycleEvent, HandoverRecord, and the generic
-// LifecycleEvent for ExternalParty / assignment / ProjectExternalParty
-// lifecycle facts (M1 precedent: OffboardWorker).
+// ProjectLifecycleEvent, SiteLifecycleEvent, HandoverRecord, TransferEvent,
+// SiteOperationalSuspension, SiteRequirementOptOut (catalogued at EP-6.0),
+// and the generic LifecycleEvent for ExternalParty / assignment /
+// ProjectExternalParty lifecycle facts (M1 precedent: OffboardWorker).
 
 import * as m1 from '../../M1/src/domain.js';
 
@@ -49,6 +58,11 @@ const M2_COMMAND_AUTH = {
   DemobiliseSite: { cap: ['company_admin'] },
   CloseSite: { cap: ['company_admin'] },
   ArchiveSite: { cap: ['company_admin'] },
+  SuspendSite: { cap: ['company_admin'] }, // §6.1.3 amended (EP-6.0)
+  UnsuspendSite: { cap: ['company_admin'] },
+  TransferProject: { system: true }, // Platform Admin surface (§6.11)
+  OptOutSiteRequirement: { cap: ['company_admin'] }, // §6.1.3 amended (EP-6.0)
+  RevokeSiteRequirementOptOut: { cap: ['company_admin'] },
   ActivateAssignment: { cap: ['supervisor', 'company_admin'] }, // §6.3.3
   PauseAssignment: { cap: ['supervisor', 'company_admin'] },
   ResumeAssignment: { cap: ['supervisor', 'company_admin'] },
@@ -251,15 +265,32 @@ export function projectExternalPartyState(store, projectExternalPartyId) {
   return state;
 }
 
+// Independent operational suspension stream (§6.1.3 amended at EP-6.0,
+// AMB-004): the latest SiteOperationalSuspension fact for a Site decides
+// whether an independent suspension is active. No SiteLifecycleEvent is
+// involved; the underlying lifecycle state is untouched.
+function independentSuspensionActive(store, siteId) {
+  const facts = factsOf(store, 'SiteOperationalSuspension', siteId);
+  const last = facts[facts.length - 1];
+  return !!last && last.payload.event === 'activated';
+}
+
 // §6.1.3 suspension overlay (D-class): a suspended Project imposes an
-// effective operational suspension on every contained Site. Derived from
-// Project lifecycle facts alone; the Site's underlying lifecycle state is
-// untouched and no SiteLifecycleEvent is produced.
+// effective operational suspension on every contained Site. The effective
+// operational status is 'suspended' when either the Project overlay or an
+// independent SiteOperationalSuspension is active; the two streams are
+// independent (a Project resume never lifts an independent suspension).
+// Derived from facts alone; no stored status (DM-INV-3).
 export function siteOperationalStatus(store, siteId) {
   const site = store.entities.get(siteId);
   if (!site || site.type !== 'Site') return null;
   const projectSuspended = projectLifecycleState(store, site.projectId) === 'suspended';
-  return { projectSuspended, operational: projectSuspended ? 'suspended' : 'normal' };
+  const independentSuspended = independentSuspensionActive(store, siteId);
+  return {
+    projectSuspended,
+    independentSuspended,
+    operational: projectSuspended || independentSuspended ? 'suspended' : 'normal',
+  };
 }
 
 // --- readiness (§4.4) — M2-aware analogue of M1's siteReady ---------------
@@ -298,10 +329,22 @@ function applicableRequirements(store, companyId, scopePred) {
   return [...groups.values()];
 }
 
+// Site opt-out (§6.1.3 amended at EP-6.0, AMB-005): the latest
+// SiteRequirementOptOut fact for (Site, Requirement) decides; an active
+// ('activated') opt-out unbinds that Project-scope Requirement from that
+// Site for readiness derivation.
+function optOutActive(store, siteId, requirementId) {
+  const facts = factsOf(store, 'SiteRequirementOptOut', siteId)
+    .filter((f) => f.payload.requirementId === requirementId);
+  const last = facts[facts.length - 1];
+  return !!last && last.payload.event === 'activated';
+}
+
 // §4.4 / PS-INV-4: site_ready := company_ready AND applicable
 // project(site)/site requirements AND SiteAssignment in assigned|active
 // (M2-aware). Project-scope Requirements apply to all contained Sites by
-// default (§6.1.3; opt-out is AMB-005 scope, halted).
+// default (§6.1.3); a Site with an active SiteRequirementOptOut for a
+// Project-scope Requirement is not bound by it (§6.1.3 amended, EP-6.0).
 export function siteReady(store, workerId, siteId) {
   const site = store.entities.get(siteId);
   if (!site || site.type !== 'Site') return { ready: false, failing: [], hasAssignment: false };
@@ -309,7 +352,7 @@ export function siteReady(store, workerId, siteId) {
   const project = store.entities.get(site.projectId);
   const scoped = applicableRequirements(store, site.companyId,
     (r) => (r.scope === 'site' && r.siteId === siteId)
-        || (r.scope === 'project' && r.projectId === project?.id));
+        || (r.scope === 'project' && r.projectId === project?.id && !optOutActive(store, siteId, r.id)));
   const failing = scoped
     .filter((r) => requirementAppliesTo(store, r, workerId))
     .filter((r) => !satisfiedBy(store, workerId, r))
@@ -501,6 +544,143 @@ function assignmentTransition(store, ctx, payload, spec) {
   return null;
 }
 
+// Independent Site operational suspension (§6.1.3 amended at EP-6.0,
+// AMB-004): F-class SiteOperationalSuspension fact, subtype event
+// activated|deactivated, mandatory reason. Not a lifecycle transition.
+function siteSuspensionTransition(store, ctx, payload, event) {
+  const err = tenantEntity(store, ctx, payload.siteId, 'Site');
+  if (err) return err;
+  if (typeof payload.reason !== 'string' || payload.reason.length === 0) {
+    return 'reason required for site operational suspension (§6.1.3 amended)';
+  }
+  const active = independentSuspensionActive(store, payload.siteId);
+  if (event === 'activated' && active) return 'site already independently suspended';
+  if (event === 'deactivated' && !active) return 'site is not independently suspended';
+  appendFact(store, ctx, {
+    type: 'SiteOperationalSuspension',
+    subject: payload.siteId,
+    companyId: ctx.companyId,
+    reason: payload.reason,
+    payload: { event },
+  });
+  return null;
+}
+
+// Project transfer (§6.1.3 amended at EP-6.0, AMB-003 option C): a new
+// Project identity is created under the receiving Company; Sites and
+// Project/Site-scoped Requirements are copied as new identities; source
+// assignments are marked removed with reason "project transfer" and none
+// are copied; Company-scoped Requirements remain with the source Company; a
+// TransferEvent links both Project identities. Source entities are
+// deep-frozen at creation and cannot change — the copy is the mechanism.
+function transferProject(store, ctx, payload) {
+  const src = store.entities.get(payload.projectId);
+  if (!src || src.type !== 'Project') return `Project not found: ${payload.projectId}`;
+  const dest = store.entities.get(payload.toCompanyId);
+  if (!dest || dest.type !== 'Company') return `Company not found: ${payload.toCompanyId}`;
+  if (dest.id === src.companyId) return 'destination Company is the source Company';
+
+  // New Project identity under the receiving Company (genesis state draft).
+  const { id: _pid, type: _pt, scope: _ps, companyId: _pc, commandId: _pc1, actor: _pa,
+    deviceId: _pd, deviceTimestamp: _pdt, serverTimestamp: _pst, state: _pst2, ...pFields } = src;
+  const newProject = createEntity(store, ctx, {
+    ...pFields,
+    type: 'Project',
+    scope: 'Company',
+    companyId: dest.id,
+    state: 'draft',
+  });
+
+  // Sites copied as new identities under the new Project (state planned).
+  const siteIdMap = new Map();
+  for (const e of [...store.entities.values()]) {
+    if (e.type !== 'Site' || e.projectId !== src.id) continue;
+    const { id: _sid, type: _st, scope: _ss, companyId: _sc, projectId: _sp, commandId: _sc1,
+      actor: _sa, deviceId: _sd, deviceTimestamp: _sdt, serverTimestamp: _sst, state: _sst2, ...sFields } = e;
+    const ns = createEntity(store, ctx, {
+      ...sFields,
+      type: 'Site',
+      scope: 'Project',
+      companyId: dest.id,
+      projectId: newProject.id,
+      state: 'planned',
+    });
+    siteIdMap.set(e.id, ns.id);
+  }
+
+  // Project/Site-scoped Requirements copied as new identities under the
+  // receiving Company; Company-scoped Requirements remain with the source.
+  for (const e of [...store.entities.values()]) {
+    if (e.type !== 'Requirement') continue;
+    if (e.scope !== 'project' && e.scope !== 'site') continue;
+    if (e.scope === 'project' && e.projectId !== src.id) continue;
+    if (e.scope === 'site' && !siteIdMap.has(e.siteId)) continue;
+    const { id: _rid, companyId: _rc, commandId: _rc1, actor: _ra, deviceId: _rd,
+      deviceTimestamp: _rdt, serverTimestamp: _rst, projectId: _rp, siteId: _rs,
+      groupId: _rg, ...rFields } = e;
+    createEntity(store, ctx, {
+      ...rFields,
+      type: 'Requirement',
+      companyId: dest.id,
+      projectId: e.scope === 'project' ? newProject.id : undefined,
+      siteId: e.scope === 'site' ? siteIdMap.get(e.siteId) : undefined,
+      groupId: nid(store, 'reqgrp'), // new identity: new requirement group
+    });
+  }
+
+  // Source assignments removed with reason "project transfer"; none copied.
+  for (const e of [...store.entities.values()]) {
+    const inScope = (e.type === 'ProjectAssignment' && e.projectId === src.id)
+      || (e.type === 'SiteAssignment' && store.entities.get(e.siteId)?.projectId === src.id);
+    if (!inScope || assignmentState(store, e.id) === 'removed') continue;
+    appendFact(store, ctx, {
+      type: 'LifecycleEvent',
+      subject: e.id,
+      companyId: src.companyId,
+      reason: 'project transfer',
+      payload: { event: 'removed', entityType: e.type },
+    });
+  }
+
+  // TransferEvent links old → new (§7.3 catalogue; §7.8 audit fields).
+  appendFact(store, ctx, {
+    type: 'TransferEvent',
+    subject: src.id,
+    companyId: src.companyId,
+    payload: { fromProjectId: src.id, toProjectId: newProject.id, toCompanyId: dest.id },
+  });
+  return null;
+}
+
+// Site opt-out from a Project-scope Requirement (§6.1.3 amended at EP-6.0,
+// AMB-005): F-class SiteRequirementOptOut fact referencing the Requirement,
+// subtype event activated|deactivated, mandatory reason. Project-scope
+// only; the Requirement must apply to the Site's Project.
+function optOutTransition(store, ctx, payload, event) {
+  const err = tenantEntity(store, ctx, payload.siteId, 'Site');
+  if (err) return err;
+  const reqErr = tenantEntity(store, ctx, payload.requirementId, 'Requirement');
+  if (reqErr) return reqErr;
+  if (typeof payload.reason !== 'string' || payload.reason.length === 0) {
+    return 'reason required for requirement opt-out (§6.1.3 amended)';
+  }
+  const req = store.entities.get(payload.requirementId);
+  if (req.scope !== 'project') return 'opt-out applies to project-scope Requirements only (§6.1.3 amended)';
+  const site = store.entities.get(payload.siteId);
+  if (req.projectId !== site.projectId) return 'requirement does not apply to this Site';
+  const active = optOutActive(store, payload.siteId, payload.requirementId);
+  if (event === 'activated' && active) return 'opt-out already active for this (Site, Requirement)';
+  if (event === 'deactivated' && !active) return 'no active opt-out for this (Site, Requirement)';
+  appendFact(store, ctx, {
+    type: 'SiteRequirementOptOut',
+    subject: payload.siteId,
+    companyId: ctx.companyId,
+    reason: payload.reason,
+    payload: { event, requirementId: payload.requirementId },
+  });
+  return null;
+}
+
 const HANDLERS = {
   ActivateProject: (store, ctx, payload) => projectTransition(store, ctx, payload, PROJECT_TRANSITIONS.ActivateProject),
   SuspendProject: (store, ctx, payload) => projectTransition(store, ctx, payload, PROJECT_TRANSITIONS.SuspendProject),
@@ -514,6 +694,12 @@ const HANDLERS = {
   DemobiliseSite: (store, ctx, payload) => siteTransition(store, ctx, payload, SITE_TRANSITIONS.DemobiliseSite),
   CloseSite: (store, ctx, payload) => siteTransition(store, ctx, payload, SITE_TRANSITIONS.CloseSite),
   ArchiveSite: (store, ctx, payload) => siteTransition(store, ctx, payload, SITE_TRANSITIONS.ArchiveSite),
+
+  SuspendSite: (store, ctx, payload) => siteSuspensionTransition(store, ctx, payload, 'activated'),
+  UnsuspendSite: (store, ctx, payload) => siteSuspensionTransition(store, ctx, payload, 'deactivated'),
+  TransferProject: (store, ctx, payload) => transferProject(store, ctx, payload),
+  OptOutSiteRequirement: (store, ctx, payload) => optOutTransition(store, ctx, payload, 'activated'),
+  RevokeSiteRequirementOptOut: (store, ctx, payload) => optOutTransition(store, ctx, payload, 'deactivated'),
 
   ActivateAssignment: (store, ctx, payload) => assignmentTransition(store, ctx, payload, ASSIGNMENT_TRANSITIONS.ActivateAssignment),
   PauseAssignment: (store, ctx, payload) => assignmentTransition(store, ctx, payload, ASSIGNMENT_TRANSITIONS.PauseAssignment),
@@ -666,8 +852,22 @@ export function execute(store, cmd) {
     companyId: undefined,
   };
 
-  // All M2 commands are company-scoped administrative/operational surfaces:
-  // a Worker actor is required (§6.11.2).
+  const auth = M2_COMMAND_AUTH[cmd.type];
+
+  // Platform Admin (system) surface — TransferProject only (§6.11). A
+  // system actor crosses Companies by design; tenancy checks do not apply
+  // to the transfer itself (M1 precedent: ctx.actor = { kind: 'system' }).
+  if (cmd.actor?.system) {
+    ctx.actor = { kind: 'system' };
+    if (!auth.system) return reject(store, ctx, 'command requires a Worker actor (§6.11.2)');
+    const err = HANDLERS[cmd.type](store, ctx, cmd.payload ?? {});
+    if (err) return reject(store, ctx, err);
+    ensureDevice(store, ctx);
+    return accept(store, ctx);
+  }
+
+  // All other M2 commands are company-scoped administrative/operational
+  // surfaces: a Worker actor is required (§6.11.2).
   const actorWorker = cmd.actor?.workerId ? store.entities.get(cmd.actor.workerId) : null;
   if (!actorWorker || actorWorker.type !== 'Worker') {
     ctx.actor = { kind: 'worker', id: cmd.actor?.workerId ?? null };
@@ -683,7 +883,7 @@ export function execute(store, cmd) {
   if (lc === 'offboarded') return reject(store, ctx, 'actor worker is offboarded');
 
   // WC-INV-8: capability flags only; role label is never consulted.
-  const auth = M2_COMMAND_AUTH[cmd.type];
+  if (auth.system) return reject(store, ctx, 'TransferProject is a Platform Admin (system) surface (§6.11)');
   const caps = m1.currentCapabilities(store, actorWorker.id);
   if (!auth.cap.some((c) => caps.has(c))) {
     return reject(store, ctx, `requires capability: ${auth.cap.join(' | ')}`);
