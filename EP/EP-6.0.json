@@ -1,0 +1,26 @@
+{
+  "ep_version": "EP-6.0",
+  "status": "FROZEN",
+  "frozen": "2026-09-28",
+  "frozen_by": "Maddy McKellar",
+  "baseline": {
+    "repository": "maddy0508/SITE-SYNC",
+    "historical_commit": "f90b77ab73cb7ae20b1084ad94fb5bc159afa841",
+    "m2_execution_baseline_commit": "cfda19f0e5d8eeb1af1407a097660819efbbdb31"
+  },
+  "supersedes": "EP-5.0",
+  "artifacts": [
+    { "id": 1,  "path": "MASTER_BLUEPRINT/MASTER_BLUEPRINT.md",         "version": "v1.0",    "sha256": "9fd7a4c266b49c8e41b427f84e50f152f4ed6e8ebfd753e6d62f9535cc92a0d7", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 2,  "path": "KIMI/OPERATING_CONTRACT.md",                   "version": "v1.0",    "sha256": "49ddf4e5d9c4ce7186ae3c8b8cbfb2790ca42e0fa382a8af3609e8aed95f47d2", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 3,  "path": "KIMI/SKILLS/01_blueprint-governance.md",       "version": "v1.0",    "sha256": "079312091aa1eba899d4f1dfc20551e6dc2595cb8578e22191ce3a61800e05ff", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 4,  "path": "KIMI/SKILLS/02_architecture-contract.md",      "version": "v1.0",    "sha256": "7a54a5be5e39cd09460f7faa0f09daab48b56f618bd1b4fc147b28f5a2d8cc87", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 5,  "path": "KIMI/SKILLS/03_repository-archaeology.md",     "version": "v1.0",    "sha256": "521f3f7ac72217559525f622aed886fe100f03bb567faba9db87701a5e4736f8", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 6,  "path": "KIMI/SKILLS/04_acceptance-test-design.md",     "version": "v1.0.1",  "sha256": "87090387857fe982185532fb76a8d075dc85539ec154a681aa3d9e5ccd431e0c", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 7,  "path": "KIMI/SKILLS/05_offline-sync-engineering.md",   "version": "v1.0",    "sha256": "d5dfb891c9ad34ffc77366783be5f10cde0529510c0ddcbd9febc0da2cc61d3f", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 8,  "path": "KIMI/SKILLS/06_audit-and-evidence.md",         "version": "v1.0",    "sha256": "d64d5ca437844b31fea311ff7afb76a9e3490cb3d2a293881bfaa7d301d05838", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 9,  "path": "KIMI/SKILLS/07_adversarial-audit.md",          "version": "v1.0",    "sha256": "b5d2c911104f75777995c68c3d3ca48d3f9ec461f1858506ca3e98bc4bd778d7", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 10,  "path": "KIMI/MILESTONES/M0_EXECUTION_CONTRACT.md",     "version": "v1.0",    "sha256": "8a367018874589516643118b13356978691876da3a77aefa62f12339afc0ef2a", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 11,  "path": "KIMI/MILESTONES/M1_EXECUTION_CONTRACT.md",     "version": "v1.0",    "sha256": "8e11c4971d0764d7de4e9f349a0c6e89dea7cfd30040d0fe60dfb133595f2277", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" },
+    { "id": 12,  "path": "KIMI/MILESTONES/M2_EXECUTION_CONTRACT.md",     "version": "v1.0.3",  "sha256": "7cf5b7ba6f0f48e9818a6cf184b8c90c9dcaecc850f7df6dbf318544a1eea89d", "commit_sha": "af0602626ef75c575e95f20a84197f86f9f67a54" }
+  ]
+}
