@@ -3,6 +3,12 @@ import { SyncCommandRepository } from '../src/sync/syncCommandRepository';
 
 const NOW = '2026-09-12T00:00:00.000Z';
 
+let testDatabaseSequence = 0;
+function nextTestDatabaseName(): string {
+  testDatabaseSequence += 1;
+  return `m17-repository-${Date.now()}-${testDatabaseSequence}.db`;
+}
+
 function insertCommand(overrides: Record<string, unknown> = {}) {
   const values = {
     commandId: 'cmd-1', projectId: 'project-1', personId: 'person-1', organisationId: 'org-1', companyId: 'company-1',
@@ -18,7 +24,7 @@ function insertCommand(overrides: Record<string, unknown> = {}) {
 }
 
 describe('sync command repository', () => {
-  beforeEach(async () => { await initializeDatabase(`m17-repository-${Date.now()}-${Math.random()}.db`); });
+  beforeEach(async () => { await initializeDatabase(nextTestDatabaseName()); });
   afterEach(async () => { await closeDatabase(); });
 
   it('claims commands in created-at then command-id order', async () => {
