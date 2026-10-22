@@ -7,6 +7,13 @@ import { closeDatabase, getDb, initializeDatabase } from '../database/localPersi
 
 type Result = { name: string; passed: boolean; detail: string };
 
+let qaRunSequence = 0;
+
+function nextQaRunId(): string {
+  qaRunSequence += 1;
+  return `${Date.now().toString(36)}-${qaRunSequence.toString(36)}`;
+}
+
 function createFixture(runId: string): {
   org: string;
   company: string;
@@ -45,7 +52,7 @@ function createFixture(runId: string): {
 async function runM16DeviceSuite(): Promise<Result[]> {
   // Database isolation is required, but the fixture identity is also unique so
   // a native database-name reuse cannot contaminate a later QA run.
-  const runId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const runId = nextQaRunId();
   const testDatabase = `m16-device-qa-${runId}.db`;
   const fixture = createFixture(runId);
   const workDateUtc = '2026-09-11';
