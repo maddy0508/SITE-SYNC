@@ -121,3 +121,14 @@ m2-ac-15) fail by construction once the next milestone lands, because the
 range is open-ended. Future milestone contracts may want to anchor the end
 of the range (e.g. milestone-gate tag) or accept the documented
 point-in-time semantics, as M2's acceptance-map does.
+
+
+## Sandbox environment notes — M2 phase 2
+
+- github.com was IP-blocked in this sandbox instance; resolved
+  via /etc/hosts entry pointing to a reachable GitHub IP.
+  Sandbox-local; will not persist across sandbox releases.
+- Two partial edit losses occurred during implementation and
+  were caught and re-applied before commit.
+- Device flow was used for GitHub credential; token deleted
+  after use; no credential material in any output.

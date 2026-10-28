@@ -117,6 +117,39 @@ chronology disclosure).
 | M2-AC-14 | m2-ac-14.test.mjs | 6134b22 | strict | FAIL (ABSENT) | 891fa7a | PASS | YES |
 | M2-AC-15 | m2-ac-15.test.mjs | 6134b22 (substantive) / ed59903 (EP-5.0 whitelist) / da983aa (EP-6.0 whitelist + catalogue) | comparative-negative | FAIL (designed; see disclosure) | da983aa | PASS | N/A |
 
+**AC-13 audit note (2026-10-28):**
+
+During phase-2 implementation the executor flagged a suspected
+comma-operator defect on the capability-rejection path
+(`return ctx, '...'` instead of proper return). Phase-2 report
+did not resolve the flag. Audit investigation at 2026-10-28
+confirmed:
+
+- The pattern does not exist at phase-1 (891fa7a6) or phase-2
+  (d800ca48) HEAD: `grep -rn "return ctx, '"` over the full
+  source tree at both refs returns no matches. The committed
+  capability-rejection path uses reject(store, ctx, reason) at
+  M2/src/domain.js:885-889.
+- AC-13 exercises this path. m2-ac-13.test.mjs drives a
+  capability-less worker against every M2 surface
+  (`const W = { workerId: worker.id }; // no capabilities`,
+  lines 27-46) and the supervisor-without-company_admin denial
+  (lines 62-73); both exit through the capability check:
+
+      const caps = m1.currentCapabilities(store, actorWorker.id);
+      if (!auth.cap.some((c) => caps.has(c))) {
+        return reject(store, ctx, `requires capability: ${auth.cap.join(' | ')}`);
+      }
+
+      (M2/src/domain.js:887-890; reject call at line 889.)
+- No source defect, no test weakening.
+- Phase-2 implementation commit (35c99afa) contains no
+  comma-return fix; the flag referred to a transient
+  working-tree draft, not committed code.
+
+Disposition: (b) — defect was in an uncommitted working-tree
+draft, never present at any committed ref.
+
 Ancestry (INV-C): `git merge-base --is-ancestor 6134b22 891fa7a` (strict
 tests → implementation): exit 0. `git merge-base --is-ancestor 6134b22
 b33ff78` (sentinel tests → AMB evidence): exit 0. `git merge-base
