@@ -132,3 +132,13 @@ point-in-time semantics, as M2's acceptance-map does.
   were caught and re-applied before commit.
 - Device flow was used for GitHub credential; token deleted
   after use; no credential material in any output.
+
+
+## M2 gate
+
+M2 gate: ACCEPTED
+Accepted by: Maddy McKellar
+Acceptance date: 2026-10-29
+Operative package at close: EP-6.0
+  (tag e81c8c3 → commit a764d4f)
+M2 final evidence commit: a0bbe2e8fdb9f6a09418d14bca4076bd345a0ddb
